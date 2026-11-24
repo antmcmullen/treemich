@@ -169,7 +169,48 @@ export class PersonService implements ProfileResolver {
       orderBy: [{ surname: "asc" }, { givenName: "asc" }, { createdAt: "asc" }]
     });
 
-    return rows.map((row) => personToJson(row));
+    return this.withVitalYears(
+      userId,
+      rows.map((row) => personToJson(row))
+    );
+  }
+
+  /**
+   * Adds `birthYear` / `deathYear` from each person's earliest dated BIRTH and DEATH life events,
+   * so tree views can show lifespans without loading every person's events.
+   */
+  async withVitalYears(userId: string, records: PersonRecord[]): Promise<PersonRecord[]> {
+    if (records.length === 0) {
+      return records;
+    }
+    const events = await prisma.lifeEvent.findMany({
+      where: {
+        userId,
+        personProfileId: { in: records.map((record) => record.id) },
+        eventType: { in: ["BIRTH", "DEATH"] },
+        year: { not: null }
+      },
+      select: { personProfileId: true, eventType: true, year: true },
+      orderBy: { year: "asc" }
+    });
+    const years = new Map<string, { birthYear: number | null; deathYear: number | null }>();
+    for (const event of events) {
+      if (!event.personProfileId || event.year === null) {
+        continue;
+      }
+      const entry = years.get(event.personProfileId) ?? { birthYear: null, deathYear: null };
+      if (event.eventType === "BIRTH") {
+        entry.birthYear ??= event.year;
+      } else {
+        entry.deathYear ??= event.year;
+      }
+      years.set(event.personProfileId, entry);
+    }
+    return records.map((record) => ({
+      ...record,
+      birthYear: years.get(record.id)?.birthYear ?? null,
+      deathYear: years.get(record.id)?.deathYear ?? null
+    }));
   }
 
   /**

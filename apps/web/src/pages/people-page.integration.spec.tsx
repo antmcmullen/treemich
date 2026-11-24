@@ -167,7 +167,9 @@ describe("PeoplePage + life events (integration)", () => {
           primaryFamilyUnitByPersonId: {},
           cooccurrence: { refreshEnabled: true, refreshIntervalDays: 7 },
           searchIncludeAlternateNames: body.searchIncludeAlternateNames ?? true,
-          ...(body.onboardingTutorial !== undefined ? { onboardingTutorial: body.onboardingTutorial } : {})
+          ...(body.onboardingTutorial !== undefined ? { onboardingTutorial: body.onboardingTutorial } : {}),
+          ...(body.graphViewMode !== undefined ? { graphViewMode: body.graphViewMode } : {}),
+          ...(body.familyChartShape !== undefined ? { familyChartShape: body.familyChartShape } : {})
         });
       }
 
@@ -791,6 +793,95 @@ describe("PeoplePage + life events (integration)", () => {
         expect.objectContaining({ id: "r3", fromPersonId: "p2", toPersonId: "p1" })
       ])
     );
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("switches the Tree workspace to the family tree and saves the choice", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(PeoplePage, { immichBaseUrl: null, currentUserName: null }));
+      await Promise.resolve();
+    });
+    for (let i = 0; i < 30 && !latestGraphProps?.graphModel.people.length; i += 1) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+    expect(container.querySelector(".family-chart")).toBeNull();
+    const toggle = [...container.querySelectorAll(".graph-view-toggle button")].find(
+      (button) => button.textContent === "Family tree"
+    ) as HTMLButtonElement | undefined;
+    expect(toggle).toBeTruthy();
+
+    latestGraphProps = null;
+    await act(async () => {
+      toggle!.click();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(".family-chart")).not.toBeNull();
+    expect(toggle!.getAttribute("aria-pressed")).toBe("true");
+    expect(latestGraphProps).toBeNull();
+    const patchBodies = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.filter(
+        (call) => String(call[0]).endsWith("/user/preferences") && call[1]?.method === "PATCH"
+      )
+      .map((call) => JSON.parse(String(call[1]?.body)) as Record<string, unknown>);
+    expect(patchBodies).toContainEqual({ graphViewMode: "familyChart" });
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("opens on the family tree when that view was saved", async () => {
+    preferencesResponse = { graphViewMode: "familyChart", lastSelectedPersonId: "p1" };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(PeoplePage, { immichBaseUrl: null, currentUserName: null }));
+      await Promise.resolve();
+    });
+    for (let i = 0; i < 30 && !container.querySelector(".family-chart-card"); i += 1) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+
+    expect(container.querySelector('.family-chart-card--focus[data-person-id="p1"]')).not.toBeNull();
+    expect(window.localStorage.getItem("treemich.graphViewMode")).toBe("familyChart");
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("uses this device's last view while preferences load, so the 3D graph never mounts", async () => {
+    window.localStorage.setItem("treemich.graphViewMode", "familyChart");
+    preferencesGetNeverResolves = true;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(PeoplePage, { immichBaseUrl: null, currentUserName: null }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(".family-chart")).not.toBeNull();
+    expect(latestGraphProps).toBeNull();
 
     act(() => {
       root.unmount();
