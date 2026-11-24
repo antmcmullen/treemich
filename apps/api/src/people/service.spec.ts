@@ -288,6 +288,28 @@ describe("PersonService", () => {
       );
     });
 
+    it("fills birthDate from the person's BIRTH life event", async () => {
+      mocks.personProfileFindMany.mockResolvedValue([
+        {
+          ...makeProfile(),
+          lifeEvents: [{ id: "le-1", createdAt: new Date("2026-01-01T00:00:00Z"), year: 1958, month: 1, day: 19 }]
+        },
+        makeProfile({ id: "pp-2", givenName: "Bob" })
+      ]);
+
+      const { PersonService } = await import("./service.js");
+      const results = await new PersonService().list("user-1");
+
+      expect(results.map((person) => person.birthDate)).toEqual(["1958-01-19", null]);
+      expect(mocks.personProfileFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            lifeEvents: expect.objectContaining({ where: { eventType: "BIRTH" } })
+          })
+        })
+      );
+    });
+
     it("adds OR name filter when query is provided", async () => {
       mocks.personProfileFindMany.mockResolvedValue([makeProfile()]);
 
