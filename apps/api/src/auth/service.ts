@@ -4,6 +4,7 @@ import { prisma } from "../db/client.js";
 import { env } from "../config/env.js";
 import { createOpaqueToken, encryptSecret, hashPassword, hashToken, verifyPassword } from "./crypto.js";
 import { ImmichAuthenticationError, loginToImmich } from "../integrations/immich/client.js";
+import type { OidcProfile } from "./oidc/provider.js";
 
 const authSessionIncludeLight = {
   user: true
@@ -28,7 +29,8 @@ type SessionWithUserFull = Prisma.TreemichSessionGetPayload<{
 const passwordLoginUserInclude = {
   _count: {
     select: {
-      profiles: true
+      profiles: true,
+      oidcIdentities: true
     }
   }
 } as const satisfies Prisma.TreemichUserInclude;
@@ -54,6 +56,16 @@ export class TreemichConflictError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "TreemichConflictError";
+  }
+}
+
+/** An SSO login matched no Treemich account, and auto-registration is off (or the login had no usable email). */
+export class OidcAccountNotFoundError extends Error {
+  readonly statusCode = 403;
+
+  constructor() {
+    super("No Treemich account matches this SSO login");
+    this.name = "OidcAccountNotFoundError";
   }
 }
 
@@ -214,6 +226,11 @@ export class AuthService {
         }
       }));
 
+    // An account that signs in with SSO and has no password must not get one from whoever types its email here.
+    if (!user.passwordHash && existing && existing._count.oidcIdentities > 0) {
+      throw new TreemichAuthError("Invalid email or password");
+    }
+
     if (!user.passwordHash) {
       await prisma.treemichUser.update({
         where: { id: user.id },
@@ -291,6 +308,49 @@ export class AuthService {
         immichEmail: login.userEmail,
         immichName: login.name
       })
+    };
+  }
+
+  /**
+   * Signs in a verified OIDC identity. A known issuer + subject signs straight in. Otherwise the identity is
+   * linked to the Treemich user with the same email (only when the provider has not marked the email
+   * unverified), or, with `autoRegister`, a new user is created.
+   */
+  async loginWithOidc(
+    profile: OidcProfile,
+    options: { autoRegister: boolean }
+  ): Promise<{
+    sessionToken: string;
+    state: AuthState;
+  }> {
+    const identity = await prisma.oidcIdentity.findUnique({
+      where: { issuer_subject: { issuer: profile.issuer, subject: profile.subject } },
+      include: { user: true }
+    });
+
+    let user;
+    if (identity) {
+      user = identity.user;
+      await prisma.oidcIdentity.update({
+        where: { id: identity.id },
+        data: { email: profile.email, lastLoginAt: new Date() }
+      });
+    } else {
+      user = await this.linkOrRegisterOidcUser(profile, options.autoRegister);
+    }
+
+    const sessionToken = createOpaqueToken();
+    await prisma.treemichSession.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashToken(sessionToken),
+        expiresAt: new Date(Date.now() + env.TREEMICH_SESSION_TTL_MS)
+      }
+    });
+
+    return {
+      sessionToken,
+      state: this.userState(user)
     };
   }
 
@@ -416,6 +476,36 @@ export class AuthService {
     });
 
     return result.count;
+  }
+
+  private async linkOrRegisterOidcUser(profile: OidcProfile, autoRegister: boolean) {
+    // An address the provider marks unverified is never used to find or create an account.
+    const email = profile.email && profile.emailVerified !== false ? profile.email.toLowerCase() : null;
+    let user = email ? await prisma.treemichUser.findFirst({ where: { email } }) : null;
+    if (user) {
+      const otherIdentity = await prisma.oidcIdentity.findUnique({
+        where: { userId_issuer: { userId: user.id, issuer: profile.issuer } }
+      });
+      if (otherIdentity) {
+        throw new TreemichConflictError("This Treemich account is already linked to a different SSO login");
+      }
+    } else if (autoRegister && email) {
+      user = await prisma.treemichUser.create({
+        data: { email, name: profile.name ?? email }
+      });
+    } else {
+      throw new OidcAccountNotFoundError();
+    }
+
+    await prisma.oidcIdentity.create({
+      data: {
+        userId: user.id,
+        issuer: profile.issuer,
+        subject: profile.subject,
+        email: profile.email
+      }
+    });
+    return user;
   }
 
   private async loginToImmichWithGenericAuthError(email: string, password: string) {

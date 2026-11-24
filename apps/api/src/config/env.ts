@@ -48,6 +48,13 @@ const optionalBooleanString = z
     return z.NEVER;
   });
 
+/** Compose files pass unset variables through as "", so treat "" as unset. */
+const emptyToUndefined = (value: unknown) => (value === "" ? undefined : value);
+
+const optionalUrlString = z.preprocess(emptyToUndefined, z.string().trim().url().optional());
+
+const optionalNonEmptyString = z.preprocess(emptyToUndefined, z.string().trim().min(1).optional());
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -149,7 +156,33 @@ const envSchema = z
     /** Max people a single report traversal may include before rejecting. */
     TREEMICH_REPORT_MAX_PEOPLE: z.coerce.number().int().positive().optional(),
     /** Reserved for future server-rendered PDF/export jobs. Default disabled. */
-    TREEMICH_REPORT_PDF_ENABLED: z.string().optional()
+    TREEMICH_REPORT_PDF_ENABLED: z.string().optional(),
+    /**
+     * OpenID Connect single sign-on. Setting the issuer, client id and client secret together adds a
+     * "Sign in with SSO" button. Leave all three unset to keep SSO off.
+     */
+    TREEMICH_OIDC_ISSUER: optionalUrlString,
+    TREEMICH_OIDC_CLIENT_ID: optionalNonEmptyString,
+    TREEMICH_OIDC_CLIENT_SECRET: optionalNonEmptyString,
+    /** How the client secret is sent to the token endpoint. */
+    TREEMICH_OIDC_TOKEN_AUTH_METHOD: z.preprocess(
+      emptyToUndefined,
+      z.enum(["client_secret_basic", "client_secret_post"]).default("client_secret_basic")
+    ),
+    /** Callback URL registered with the provider. Default: `${WEB_ORIGIN}/api/auth/oidc/callback`. */
+    TREEMICH_OIDC_REDIRECT_URI: optionalUrlString,
+    TREEMICH_OIDC_SCOPES: z.preprocess(
+      emptyToUndefined,
+      z.string().trim().min(1).default("openid profile email")
+    ),
+    TREEMICH_OIDC_BUTTON_LABEL: z.preprocess(
+      emptyToUndefined,
+      z.string().trim().min(1).default("Sign in with SSO")
+    ),
+    /** When true, an SSO login with no matching Treemich account creates one. Default: off (link by email only). */
+    TREEMICH_OIDC_AUTO_REGISTER: optionalBooleanString,
+    /** When true, email/password and Immich migration sign-in are turned off and SSO is the only way in. */
+    TREEMICH_OIDC_ONLY: optionalBooleanString
   })
   .superRefine((value, ctx) => {
     if (value.NODE_ENV === "production" && !value.WEB_ORIGIN) {
@@ -159,12 +192,65 @@ const envSchema = z
         message: "WEB_ORIGIN is required when NODE_ENV=production"
       });
     }
+
+    const oidcParts = [
+      value.TREEMICH_OIDC_ISSUER,
+      value.TREEMICH_OIDC_CLIENT_ID,
+      value.TREEMICH_OIDC_CLIENT_SECRET
+    ];
+    const oidcConfigured = oidcParts.every(Boolean);
+    if (!oidcConfigured && oidcParts.some(Boolean)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["TREEMICH_OIDC_ISSUER"],
+        message:
+          "TREEMICH_OIDC_ISSUER, TREEMICH_OIDC_CLIENT_ID and TREEMICH_OIDC_CLIENT_SECRET must be set together"
+      });
+    }
+    if (value.TREEMICH_OIDC_ONLY && !oidcConfigured) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["TREEMICH_OIDC_ONLY"],
+        message:
+          "TREEMICH_OIDC_ONLY needs TREEMICH_OIDC_ISSUER, TREEMICH_OIDC_CLIENT_ID and TREEMICH_OIDC_CLIENT_SECRET"
+      });
+    }
+    if (!oidcConfigured) {
+      return;
+    }
+    if (!value.TREEMICH_OIDC_REDIRECT_URI && !value.WEB_ORIGIN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["TREEMICH_OIDC_REDIRECT_URI"],
+        message: "Set TREEMICH_OIDC_REDIRECT_URI or WEB_ORIGIN when OIDC sign-in is enabled"
+      });
+    }
+    if (value.TREEMICH_OIDC_REDIRECT_URI) {
+      const redirect = new URL(value.TREEMICH_OIDC_REDIRECT_URI);
+      if (redirect.search || redirect.hash) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["TREEMICH_OIDC_REDIRECT_URI"],
+          message: "TREEMICH_OIDC_REDIRECT_URI must not contain a query string or fragment"
+        });
+      }
+    }
+    if (!value.TREEMICH_OIDC_SCOPES.split(/\s+/).includes("openid")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["TREEMICH_OIDC_SCOPES"],
+        message: 'TREEMICH_OIDC_SCOPES must include "openid"'
+      });
+    }
   });
 
 export type AppEnv = z.infer<typeof envSchema>;
 
+/** Parses and validates an environment object (throws on misconfiguration). */
+export const parseEnv = (source: NodeJS.ProcessEnv): AppEnv => envSchema.parse(source);
+
 /** Parsed and validated environment (throws at boot on misconfiguration). */
-export const env: AppEnv = envSchema.parse(process.env);
+export const env: AppEnv = parseEnv(process.env);
 
 /** Whether to set the Secure flag on session cookies. Defaults to true in production. */
 export const isCookieSecure = (cookieSecure?: string, nodeEnv?: string): boolean => {
@@ -260,6 +346,45 @@ export const isReportsEnabled = (): boolean => {
 export const reportMaxDepth = (): number => Math.min(env.TREEMICH_REPORT_MAX_DEPTH ?? 6, 10);
 
 export const reportMaxPeople = (): number => env.TREEMICH_REPORT_MAX_PEOPLE ?? 1000;
+
+/** Resolved OpenID Connect sign-in settings, or `null` when SSO is not configured. */
+export type OidcSettings = {
+  issuer: URL;
+  clientId: string;
+  clientSecret: string;
+  tokenAuthMethod: "client_secret_basic" | "client_secret_post";
+  redirectUri: URL;
+  /** Where the browser lands after the SSO callback, signed in or with an `sso_error` code. */
+  postLoginUrl: URL;
+  scopes: string;
+  buttonLabel: string;
+  autoRegister: boolean;
+  oidcOnly: boolean;
+};
+
+export const getOidcSettings = (source: AppEnv = env): OidcSettings | null => {
+  const issuer = source.TREEMICH_OIDC_ISSUER;
+  const clientId = source.TREEMICH_OIDC_CLIENT_ID;
+  const clientSecret = source.TREEMICH_OIDC_CLIENT_SECRET;
+  if (!issuer || !clientId || !clientSecret) {
+    return null;
+  }
+  const redirectUri = source.TREEMICH_OIDC_REDIRECT_URI
+    ? new URL(source.TREEMICH_OIDC_REDIRECT_URI)
+    : new URL("/api/auth/oidc/callback", source.WEB_ORIGIN);
+  return {
+    issuer: new URL(issuer),
+    clientId,
+    clientSecret,
+    tokenAuthMethod: source.TREEMICH_OIDC_TOKEN_AUTH_METHOD,
+    redirectUri,
+    postLoginUrl: new URL("/", source.WEB_ORIGIN ?? redirectUri),
+    scopes: source.TREEMICH_OIDC_SCOPES,
+    buttonLabel: source.TREEMICH_OIDC_BUTTON_LABEL,
+    autoRegister: source.TREEMICH_OIDC_AUTO_REGISTER,
+    oidcOnly: source.TREEMICH_OIDC_ONLY
+  };
+};
 
 export const isReportPdfEnabled = (): boolean => {
   const v = env.TREEMICH_REPORT_PDF_ENABLED;

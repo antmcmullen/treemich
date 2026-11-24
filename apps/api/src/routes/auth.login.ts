@@ -6,6 +6,7 @@ import rateLimit from "@fastify/rate-limit";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { setSessionCookie } from "../auth/request.js";
+import { getOidcSettings } from "../config/env.js";
 import { EXPENSIVE_ROUTE_RATE_LIMIT } from "./rate-limit.js";
 
 const bodySchema = z.object({
@@ -25,6 +26,9 @@ export const registerAuthLoginRoute: FastifyPluginAsync = async (app) => {
       "/auth/login",
       { config: { rateLimit: EXPENSIVE_ROUTE_RATE_LIMIT } },
       async (request, reply) => {
+        if (getOidcSettings()?.oidcOnly) {
+          return reply.code(403).send({ statusCode: 403, error: "Password sign-in is turned off. Use SSO." });
+        }
         const body = bodySchema.parse(request.body);
         const result =
           body.provider === "immich"

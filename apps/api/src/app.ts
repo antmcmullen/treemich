@@ -20,6 +20,7 @@ import { registerAuthLinkStatusRoute } from "./routes/auth.link-status.js";
 import { registerAuthLoginRoute } from "./routes/auth.login.js";
 import { registerAuthLogoutRoute } from "./routes/auth.logout.js";
 import { registerAuthMeRoute } from "./routes/auth.me.js";
+import { registerAuthOidcRoutes } from "./routes/auth.oidc.js";
 import { registerFocusShareRoutes } from "./routes/focus-shares.js";
 import { registerFocusShareUnlockRoute } from "./routes/focus-share-unlock.js";
 import { registerFocusShareGuestGraphRoute } from "./routes/focus-share-guest-graph.js";
@@ -140,6 +141,9 @@ export const buildApp = (options: BuildAppOptions = {}) => {
       routePath === "/auth/login" ||
       routePath === "/auth/me" ||
       routePath === "/auth/logout" ||
+      routePath === "/auth/providers" ||
+      routePath === "/auth/oidc/login" ||
+      routePath === "/auth/oidc/callback" ||
       routePath === "/share/:publicId/unlock" ||
       routePath === "/share/guest/graph" ||
       routePath === "/share/guest/people/:personId/thumbnail" ||
@@ -225,6 +229,7 @@ export const buildApp = (options: BuildAppOptions = {}) => {
   app.register(registerAuthLoginRoute);
   app.register(registerAuthLogoutRoute);
   app.register(registerAuthMeRoute);
+  app.register(registerAuthOidcRoutes);
   app.register(registerAuthChangePasswordRoute);
   app.register(registerAuthImmichLinkRoutes);
   app.register(registerAuthLinkStatusRoute);

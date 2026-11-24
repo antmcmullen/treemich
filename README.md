@@ -190,26 +190,78 @@ This starts the API on `localhost:4000` and the web app on `localhost:5173` with
 
 ## Environment Variables
 
-| Variable                       | Default                 | Description                                                                        |
-| ------------------------------ | ----------------------- | ---------------------------------------------------------------------------------- |
-| `PORT`                         | `4000`                  | API server port                                                                    |
-| `DATABASE_URL`                 | --                      | PostgreSQL connection string                                                       |
-| `IMMICH_BASE_URL`              | _(unset)_               | Optional Immich API base URL; when unset, Immich provider login/import is disabled |
-| `IMMICH_PEOPLE_PAGE_SIZE`      | `1000`                  | Page size when fetching people from Immich                                         |
-| `TREEMICH_ENCRYPTION_KEY`      | --                      | 64-char hex key for encrypting stored Immich tokens                                |
-| `TREEMICH_SESSION_COOKIE_NAME` | `treemich_session`      | Browser cookie name                                                                |
-| `TREEMICH_SESSION_TTL_MS`      | `2592000000` (30 days)  | Session lifetime                                                                   |
-| `WEB_ORIGIN`                   | `http://localhost:5173` | CORS allowed origin                                                                |
-| `RATE_LIMIT_MAX`               | `300`                   | Max API requests per time window                                                   |
-| `RATE_LIMIT_TIME_WINDOW_MS`    | `60000`                 | Rate limit window in ms                                                            |
-| `VITE_TREEMICH_API_URL`        | `/api`                  | Frontend API base URL (build-time)                                                 |
+| Variable                                                                         | Default                                | Description                                                                                  |
+| -------------------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `PORT`                                                                           | `4000`                                 | API server port                                                                              |
+| `DATABASE_URL`                                                                   | --                                     | PostgreSQL connection string                                                                 |
+| `IMMICH_BASE_URL`                                                                | _(unset)_                              | Optional Immich API base URL; when unset, Immich provider login/import is disabled           |
+| `IMMICH_PEOPLE_PAGE_SIZE`                                                        | `1000`                                 | Page size when fetching people from Immich                                                   |
+| `TREEMICH_ENCRYPTION_KEY`                                                        | --                                     | 64-char hex key for encrypting stored Immich tokens                                          |
+| `TREEMICH_SESSION_COOKIE_NAME`                                                   | `treemich_session`                     | Browser cookie name                                                                          |
+| `TREEMICH_SESSION_TTL_MS`                                                        | `2592000000` (30 days)                 | Session lifetime                                                                             |
+| `WEB_ORIGIN`                                                                     | `http://localhost:5173`                | CORS allowed origin                                                                          |
+| `RATE_LIMIT_MAX`                                                                 | `300`                                  | Max API requests per time window                                                             |
+| `RATE_LIMIT_TIME_WINDOW_MS`                                                      | `60000`                                | Rate limit window in ms                                                                      |
+| `VITE_TREEMICH_API_URL`                                                          | `/api`                                 | Frontend API base URL (build-time)                                                           |
+| `TREEMICH_OIDC_ISSUER`, `TREEMICH_OIDC_CLIENT_ID`, `TREEMICH_OIDC_CLIENT_SECRET` | _(unset)_                              | Optional single sign-on; set all three together (see [Single sign-on](#single-sign-on-oidc)) |
+| `TREEMICH_OIDC_TOKEN_AUTH_METHOD`                                                | `client_secret_basic`                  | `client_secret_basic` or `client_secret_post`                                                |
+| `TREEMICH_OIDC_REDIRECT_URI`                                                     | `${WEB_ORIGIN}/api/auth/oidc/callback` | Callback URL registered with the provider                                                    |
+| `TREEMICH_OIDC_SCOPES`                                                           | `openid profile email`                 | Scopes requested (must include `openid`)                                                     |
+| `TREEMICH_OIDC_BUTTON_LABEL`                                                     | `Sign in with SSO`                     | Text of the login button                                                                     |
+| `TREEMICH_OIDC_AUTO_REGISTER`                                                    | `false`                                | Create a Treemich account for an SSO login that matches none                                 |
+| `TREEMICH_OIDC_ONLY`                                                             | `false`                                | Turn off email/password and Immich migration sign-in                                         |
 
 ## Auth Model
 
 - Sign in with a Treemich email and password (standalone; no Immich required).
 - Optionally sign in via Immich credentials (`provider: "immich"` in the login body) as a legacy migration/provider path when `IMMICH_BASE_URL` is configured.
+- Optionally sign in with an OpenID Connect provider (single sign-on), below.
 - Treemich stores a session cookie for browser auth. Immich tokens are encrypted at rest and used only for optional provider calls.
 - All relationship and profile data is private per Treemich user.
+
+### Single sign-on (OIDC)
+
+Treemich can use any OpenID Connect provider (Authelia, Authentik, Keycloak, Google, ...) with the authorization
+code flow, PKCE (S256), `state` and `nonce`. It needs a confidential client:
+
+- **Redirect URI:** `https://<your Treemich host>/api/auth/oidc/callback` (the default is built from `WEB_ORIGIN`).
+- **Scopes:** `openid profile email`. **Grant:** `authorization_code`. **Response type:** `code`.
+- The provider must be reachable from the API container at the issuer URL (discovery, token, JWKS and userinfo).
+
+Set `TREEMICH_OIDC_ISSUER`, `TREEMICH_OIDC_CLIENT_ID` and `TREEMICH_OIDC_CLIENT_SECRET`, and the login screen shows a
+button. How a login maps to an account:
+
+1. A login seen before (same issuer and `sub`) signs straight in.
+2. A first login links to the Treemich account whose email matches the provider's `email` claim, unless the provider
+   sends `email_verified: false`. Each account links to at most one login per issuer.
+3. Otherwise, with `TREEMICH_OIDC_AUTO_REGISTER=true` a new account is created; without it the login screen says no
+   account matches.
+
+An account that has only ever signed in with SSO can't be given a password through the login form. With
+`TREEMICH_OIDC_ONLY=true`, `POST /auth/login` returns 403 and the login screen shows only the SSO button.
+Signing out ends the Treemich session only, not the provider's.
+
+Example Authelia client (4.39):
+
+```yaml
+identity_providers:
+  oidc:
+    clients:
+      - client_id: "treemich"
+        client_name: "Treemich"
+        client_secret: "$pbkdf2-sha512$..." # digest of TREEMICH_OIDC_CLIENT_SECRET
+        public: false
+        authorization_policy: "one_factor"
+        require_pkce: true
+        pkce_challenge_method: "S256"
+        redirect_uris:
+          - "https://tree.example.com/api/auth/oidc/callback"
+        scopes: ["openid", "profile", "email"]
+        response_types: ["code"]
+        grant_types: ["authorization_code"]
+        userinfo_signed_response_alg: "none"
+        token_endpoint_auth_method: "client_secret_basic"
+```
 
 ## API Endpoints
 
@@ -218,6 +270,9 @@ This starts the API on `localhost:4000` and the web app on `localhost:5173` with
 | `POST`   | `/auth/login`                     | Sign in (email+password standalone, or Immich provider) |
 | `POST`   | `/auth/logout`                    | End session                                             |
 | `GET`    | `/auth/me`                        | Current session state                                   |
+| `GET`    | `/auth/providers`                 | Sign-in methods offered (password, SSO button label)    |
+| `GET`    | `/auth/oidc/login`                | Start SSO sign-in (browser redirect to the provider)    |
+| `GET`    | `/auth/oidc/callback`             | SSO callback; sets the session cookie                   |
 | `GET`    | `/auth/link-status`               | Immich link status (optional provider)                  |
 | `GET`    | `/people`                         | List Treemich-owned people                              |
 | `POST`   | `/people`                         | Create a new person (no Immich required)                |

@@ -231,6 +231,41 @@ body {
   color: #fca5a5;
 }
 
+/* Single sign-on: a link (full-page navigation to the provider) styled as the primary button. */
+.auth-sso-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 9px 11px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid #475569;
+  background: #0ea5e9;
+  color: #0f172a;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background-color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.auth-sso-button:hover {
+  transform: translateY(-1px);
+}
+
+.auth-sso-button:focus-visible {
+  outline: 2px solid #f8fafc;
+  outline-offset: 2px;
+}
+
+.auth-divider {
+  margin: 0;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
