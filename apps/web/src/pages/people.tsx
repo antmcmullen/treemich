@@ -152,6 +152,8 @@ const clampGraphRenderLimit = (value: number) =>
 
 type Props = {
   immichBaseUrl?: string | null;
+  /** Immich address for browser links; defaults to `immichBaseUrl`. */
+  immichWebUrl?: string | null;
   currentUserName?: string | null;
   /** Opens the first-login tutorial replay from Settings (optional). */
   onReplayOnboardingTutorial?: () => void;
@@ -438,11 +440,16 @@ const DetailContainer = memo(
 
 export const PeoplePage = ({
   immichBaseUrl = null,
+  immichWebUrl = null,
   currentUserName = null,
   onReplayOnboardingTutorial
 }: Props) => (
   <ToastProvider>
-    <PeopleGraphDataProvider immichBaseUrl={immichBaseUrl} currentUserName={currentUserName}>
+    <PeopleGraphDataProvider
+      immichBaseUrl={immichBaseUrl}
+      immichWebUrl={immichWebUrl}
+      currentUserName={currentUserName}
+    >
       <PeopleReviewProvider>
         <PersonDetailProviderTree>
           <PeoplePageShell onReplayOnboardingTutorial={onReplayOnboardingTutorial} />
@@ -750,7 +757,7 @@ const PeoplePageShell = ({ onReplayOnboardingTutorial }: PeoplePageShellProps) =
           people={graph.people}
           relationships={graph.relationships}
           dismissedKeys={graph.savedPreferences?.dismissedSuggestions ?? emptyDismissedKeys}
-          immichBaseUrl={graph.immichBaseUrl}
+          immichBaseUrl={graph.immichWebUrl}
           isSavingRelationship={graph.isSavingRelationship}
           onCreateRelationship={graph.onCreateRelationship}
           onDismiss={graph.onDismissSuggestion}

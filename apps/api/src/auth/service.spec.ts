@@ -275,6 +275,34 @@ describe("AuthService.linkImmichAccount", () => {
     mocks.linkedImmichAccountUpsert.mockResolvedValue({ id: "linked-1" });
   });
 
+  it("gives browser links the public Immich address when the API uses an internal one", async () => {
+    const { loginToImmich } = await import("../integrations/immich/client.js");
+    vi.mocked(loginToImmich).mockResolvedValue({
+      accessToken: "fresh-token",
+      userId: "immich-user-1",
+      userEmail: "alice@example.com",
+      name: "Alice",
+      isAdmin: false,
+      shouldChangePassword: false,
+      isOnboarded: true
+    });
+    const { env } = await import("../config/env.js");
+    const mutableEnv = env as { IMMICH_PUBLIC_URL?: string };
+    mutableEnv.IMMICH_PUBLIC_URL = "https://photos.example";
+    try {
+      const { AuthService } = await import("./service.js");
+      const result = await new AuthService().linkImmichAccount("user-1", "alice@example.com", "password");
+      expect(result).toEqual(
+        expect.objectContaining({
+          immichBaseUrl: "https://immich.example",
+          immichWebUrl: "https://photos.example"
+        })
+      );
+    } finally {
+      delete mutableEnv.IMMICH_PUBLIC_URL;
+    }
+  });
+
   it("links Immich credentials to the current Treemich user (client syncs people separately)", async () => {
     const { loginToImmich } = await import("../integrations/immich/client.js");
     vi.mocked(loginToImmich).mockResolvedValue({
@@ -293,6 +321,7 @@ describe("AuthService.linkImmichAccount", () => {
     expect(result).toEqual({
       linked: true,
       immichBaseUrl: "https://immich.example",
+      immichWebUrl: "https://immich.example",
       immichEmail: "alice@example.com",
       immichName: "Alice"
     });

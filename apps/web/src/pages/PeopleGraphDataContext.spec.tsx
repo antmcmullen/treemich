@@ -120,6 +120,44 @@ describe("PeopleGraphDataContext", () => {
     });
   });
 
+  it("uses the public Immich address for browser links, falling back to the API's", async () => {
+    const seen: Array<{ base: string | null; web: string | null }> = [];
+    const Probe = () => {
+      const graph = usePeopleGraphData();
+      useEffect(() => {
+        seen.push({ base: graph.immichBaseUrl, web: graph.immichWebUrl });
+      }, [graph.immichBaseUrl, graph.immichWebUrl]);
+      return null;
+    };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const renderWith = async (props: { immichBaseUrl: string | null; immichWebUrl?: string | null }) => {
+      await act(async () => {
+        root.render(
+          createElement(
+            ToastProvider,
+            null,
+            createElement(PeopleGraphDataProvider, { ...props, currentUserName: null }, createElement(Probe))
+          )
+        );
+      });
+    };
+
+    await renderWith({
+      immichBaseUrl: "http://immich_server:2283/api",
+      immichWebUrl: "https://photos.example"
+    });
+    expect(seen.at(-1)).toEqual({ base: "http://immich_server:2283/api", web: "https://photos.example" });
+
+    await renderWith({ immichBaseUrl: "https://immich.example/api", immichWebUrl: null });
+    expect(seen.at(-1)).toEqual({ base: "https://immich.example/api", web: "https://immich.example/api" });
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
   it("recognizes equivalent people lists", () => {
     const people: PersonRecord[] = [
       {

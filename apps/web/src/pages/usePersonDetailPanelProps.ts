@@ -64,7 +64,7 @@ export const usePersonDetailPanelProps = (): PersonDetailPanelProps => {
       onImmichIdentityUnlink: graph.handleUnlinkImmichIdentity,
       onDismissSuggestion: graph.onDismissSuggestion,
       isSavingRelationship: graph.isSavingRelationship,
-      immichBaseUrl: graph.immichBaseUrl,
+      immichBaseUrl: graph.immichWebUrl,
       primaryFamilyUnitByPersonId: graph.savedPreferences?.primaryFamilyUnitByPersonId ?? {},
       onPrimaryFamilyUnitChange: graph.onPrimaryFamilyUnitChange,
       relationshipLifeEventsById: detail.relationshipLifeEventsById,

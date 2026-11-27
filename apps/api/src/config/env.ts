@@ -67,6 +67,13 @@ const envSchema = z
       .url()
       .optional()
       .or(z.literal("").transform(() => undefined)),
+    /** Immich address for links opened in the browser, when IMMICH_BASE_URL is only reachable by the API. */
+    IMMICH_PUBLIC_URL: z
+      .string()
+      .trim()
+      .url()
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
     IMMICH_PEOPLE_PAGE_SIZE: z.coerce.number().int().positive().default(1000),
     IMMICH_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
     IMMICH_HTTP_MAX_RETRIES: z.coerce.number().int().nonnegative().default(2),

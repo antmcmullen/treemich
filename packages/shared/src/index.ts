@@ -452,7 +452,10 @@ export type AuthUser = {
 /** Whether the Treemich account is linked to Immich and basic link metadata. */
 export type LinkStatus = {
   linked: boolean;
+  /** Immich address the API server uses, which may be an internal Docker name. */
   immichBaseUrl?: string;
+  /** Immich address for links opened in the browser (`IMMICH_PUBLIC_URL`, else `immichBaseUrl`). */
+  immichWebUrl?: string;
   immichEmail?: string;
   immichName?: string;
 };
