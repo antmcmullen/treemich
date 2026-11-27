@@ -39,6 +39,7 @@ import {
   relationshipStyleByKind,
   type GraphFilter
 } from "./graph/relationshipStyles";
+import { resolveFilterVisibilityWhenRelationshipsArrive } from "./graph/noRelationshipsFilterDefaults";
 import { useGraphLayoutState } from "./graph/useGraphLayoutState";
 import { useGraphCameraControls } from "./graph/useGraphCameraControls";
 import {
@@ -301,6 +302,25 @@ const PeopleGraph3DComponent = ({
     setFocusDescendantDepth(savedPreferences.focusDescendantDepth ?? defaultFocusDescendantDepth);
     setFocusCollateralDepth(savedPreferences.focusCollateralDepth ?? defaultFocusCollateralDepth);
   }, [defaultToNoRelationshipsGraphState, noRelationshipsGraphFilterVisibility, savedPreferences]);
+
+  // A tree that loaded with no relationships starts with every layer off. When relationships then arrive
+  // in this page session (GEDCOM import, add relative), turn the layers back on, or the new lines stay
+  // hidden until a reload. A layer the user has toggled since is left alone.
+  const wasNoRelationshipsDefaultRef = useRef(defaultToNoRelationshipsGraphState);
+  useEffect(() => {
+    const wasNoRelationshipsDefault = wasNoRelationshipsDefaultRef.current;
+    wasNoRelationshipsDefaultRef.current = defaultToNoRelationshipsGraphState;
+    setGraphViewPreferences((current) => {
+      const next = resolveFilterVisibilityWhenRelationshipsArrive({
+        wasNoRelationshipsDefault,
+        isNoRelationshipsDefault: defaultToNoRelationshipsGraphState,
+        currentVisibility: current.filterVisibility,
+        noRelationshipsVisibility: noRelationshipsGraphFilterVisibility,
+        defaultVisibility: defaultGraphFilterVisibility
+      });
+      return next ? { ...current, filterVisibility: next } : current;
+    });
+  }, [defaultToNoRelationshipsGraphState, noRelationshipsGraphFilterVisibility]);
 
   useEffect(
     () => () => {
