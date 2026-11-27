@@ -142,6 +142,7 @@ model TreemichUser {
   createdAt                DateTime                   @default(now())
   updatedAt                DateTime                   @updatedAt
   linkedAccount            LinkedImmichAccount?
+  oidcIdentities           OidcIdentity[]
   sessions                 TreemichSession[]
   profiles                 PersonProfile[]
   personExternalIdentities PersonExternalIdentity[]
@@ -186,6 +187,22 @@ model LinkedImmichAccount {
   user                 TreemichUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([immichBaseUrl, immichUserId])
+}
+
+/// An OpenID Connect login (issuer + subject) linked to a Treemich user.
+model OidcIdentity {
+  id          String       @id @default(cuid())
+  userId      String
+  issuer      String
+  subject     String
+  email       String?
+  lastLoginAt DateTime     @default(now())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  user        TreemichUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issuer, subject])
+  @@unique([userId, issuer])
 }
 
 model TreemichSession {

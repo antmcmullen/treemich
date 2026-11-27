@@ -38,7 +38,8 @@ vi.mock("../config/env.js", () => ({
     IMMICH_BASE_URL: "https://immich.example",
     IMMICH_HTTP_TIMEOUT_MS: 5000
   },
-  isCookieSecure: () => false
+  isCookieSecure: () => false,
+  getOidcSettings: () => null
 }));
 
 vi.mock("../integrations/immich/client.js", () => ({
