@@ -356,7 +356,9 @@ export class CooccurrenceService {
       where: { userId }
     });
 
-    const baseDate = existing?.lastRunAt ?? now;
+    // Count from the last run, or from when the schedule began if it has never run. Counting from
+    // `now` let every preference save postpone a user's first count by another full interval.
+    const baseDate = existing ? (existing.lastRunAt ?? existing.createdAt) : now;
     const nextRunAt = addDays(baseDate, preferences.refreshIntervalDays);
 
     if (existing) {
