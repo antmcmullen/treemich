@@ -26,6 +26,9 @@ import type {
   CreateRepositoryBody,
   CreateResearchTaskBody,
   CreateSourceBody,
+  CooccurrenceEdgeRecord,
+  CooccurrenceEdgesResponse,
+  CooccurrenceJobResponse,
   FocusShareRecord,
   FamilyRecord,
   GraphLayoutRequest,
@@ -58,6 +61,7 @@ import type {
   PersonRecord,
   PhotoCluster,
   PhotoCooccurrenceEdge,
+  PhotoCooccurrenceResponse,
   PedigreeReportResponse,
   DescendantReportResponse,
   FamilyGroupSheetResponse,
@@ -101,6 +105,8 @@ export type {
   CreateRepositoryBody,
   CreateResearchTaskBody,
   CreateSourceBody,
+  CooccurrenceEdgeRecord,
+  CooccurrenceJobResponse,
   FamilyRecord,
   GraphLayoutRequest,
   GraphLayoutResponse,
@@ -131,6 +137,7 @@ export type {
   PersonRecord,
   PhotoCluster,
   PhotoCooccurrenceEdge,
+  PhotoCooccurrenceResponse,
   PedigreeReportResponse,
   DescendantReportResponse,
   FamilyGroupSheetResponse,
@@ -764,23 +771,69 @@ export const importImmichCooccurrence = async (): Promise<{ jobId: string; statu
   return (await response.json()) as { jobId: string; status: string };
 };
 
+/** `GET /people/cooccurrence/status` — latest co-occurrence job and refresh schedule. */
+export const getCooccurrenceStatus = async (options?: RequestOptions): Promise<CooccurrenceJobResponse> => {
+  const response = await fetchWithRetry(`${treemichApi}/people/cooccurrence/status`, {
+    cache: "no-store",
+    signal: options?.signal
+  });
+  await ensureOk(response, "Failed to load photo connection status");
+  return (await response.json()) as CooccurrenceJobResponse;
+};
+
+/** Largest page the edges route accepts; one person never shares photos with more people than this. */
+const personCooccurrenceEdgeLimit = 2000;
+
+/** `GET /people/cooccurrence/edges?personId=` — everyone who shares at least one photo with a person. */
+export const getPersonCooccurrenceEdges = async (
+  personId: string,
+  options?: RequestOptions
+): Promise<CooccurrenceEdgeRecord[]> => {
+  const query = new URLSearchParams({ personId, limit: String(personCooccurrenceEdgeLimit) });
+  const response = await fetchWithRetry(`${treemichApi}/people/cooccurrence/edges?${query.toString()}`, {
+    cache: "no-store",
+    signal: options?.signal
+  });
+  await ensureOk(response, "Failed to load photo connections");
+  const body = (await response.json()) as CooccurrenceEdgesResponse;
+  return body.edges ?? [];
+};
+
+/** `GET /people/cooccurrence` — every pair sharing at least `minSharedPhotos` photos, most shared first. */
+export const getPhotoCooccurrence = async (
+  minSharedPhotos: number,
+  options?: RequestOptions
+): Promise<PhotoCooccurrenceResponse> => {
+  const query = new URLSearchParams({ minSharedPhotos: String(minSharedPhotos) });
+  const response = await fetchWithRetry(`${treemichApi}/people/cooccurrence?${query.toString()}`, {
+    cache: "no-store",
+    signal: options?.signal
+  });
+  await ensureOk(response, "Failed to load photo connections");
+  return (await response.json()) as PhotoCooccurrenceResponse;
+};
+
+/** Immich web origin from the stored API base URL (strips trailing `/` and `/api`). */
+const immichAppBaseUrl = (immichBaseUrl?: string | null) => {
+  const normalizedBase = immichBaseUrl?.trim().replace(/\/+$/, "") ?? "";
+  const appBase = normalizedBase.endsWith("/api") ? normalizedBase.slice(0, -4) : normalizedBase;
+  return appBase || null;
+};
+
 /** Deep link to Immich person page when base URL is known (strips trailing `/api`). */
 export const immichPersonUrl = (personId: string, immichBaseUrl?: string | null) => {
-  if (!immichBaseUrl) {
+  const appBase = immichAppBaseUrl(immichBaseUrl);
+  return appBase ? `${appBase}/people/${encodeURIComponent(personId)}` : null;
+};
+
+/** Deep link to the Immich search for photos that contain every one of these Immich people. */
+export const immichPhotosTogetherUrl = (providerPersonIds: string[], immichBaseUrl?: string | null) => {
+  const appBase = immichAppBaseUrl(immichBaseUrl);
+  if (!appBase || providerPersonIds.length < 2) {
     return null;
   }
-
-  const normalizedBase = immichBaseUrl.trim().replace(/\/+$/, "");
-  if (!normalizedBase) {
-    return null;
-  }
-
-  const appBase = normalizedBase.endsWith("/api") ? normalizedBase.slice(0, -4) : normalizedBase;
-  if (!appBase) {
-    return null;
-  }
-
-  return `${appBase}/people/${encodeURIComponent(personId)}`;
+  const query = JSON.stringify({ personIds: providerPersonIds });
+  return `${appBase}/search?query=${encodeURIComponent(query)}`;
 };
 
 /** `GET /user/preferences` — graph and UI preferences. */
