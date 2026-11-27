@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
-import { applyCanonicalBirth, selectCanonicalBirth } from "./canonicalBirth.js";
+import { applyCanonicalBirth, canonicalBirthIsoDate, selectCanonicalBirth } from "./canonicalBirth.js";
 
 const birth = (
   id: string,
@@ -167,5 +167,21 @@ describe("applyCanonicalBirth", () => {
       where: { id: "earlier" },
       data: { year: 1815, month: 12, day: 10 }
     });
+  });
+});
+
+describe("canonicalBirthIsoDate", () => {
+  it("formats the earliest BIRTH event's full date", () => {
+    expect(
+      canonicalBirthIsoDate([
+        birth("later", "2026-02-01T00:00:00Z", 1960, 5, 6),
+        birth("earlier", "2026-01-01T00:00:00Z", 1958, 1, 9)
+      ])
+    ).toBe("1958-01-09");
+  });
+
+  it("returns null without a full date or without any BIRTH event", () => {
+    expect(canonicalBirthIsoDate([birth("year-only", "2026-01-01T00:00:00Z", 1958, null, null)])).toBeNull();
+    expect(canonicalBirthIsoDate([])).toBeNull();
   });
 });

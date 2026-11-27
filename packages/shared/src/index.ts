@@ -464,6 +464,14 @@ export type AuthState = {
   linkStatus?: LinkStatus;
 };
 
+/** `GET /auth/providers`: the sign-in methods the login screen should offer. */
+export type AuthProviders = {
+  /** Email/password and Immich migration sign-in (off when the server runs SSO-only). */
+  passwordLogin: boolean;
+  /** OpenID Connect single sign-on; `null` when not configured. */
+  oidc: { label: string } | null;
+};
+
 /** Natural-language people search: parsed intent, source candidates, and ranked matches. */
 export type SearchRelationshipsResponse = {
   parsed?: {

@@ -52,7 +52,8 @@ vi.mock("../config/env.js", () => ({
     IMMICH_HTTP_TIMEOUT_MS: 5000,
     TREEMICH_ADMIN_PASSWORD: "treemich-pass!"
   },
-  isCookieSecure: () => false
+  isCookieSecure: () => false,
+  getOidcSettings: () => null
 }));
 
 vi.mock("../integrations/immich/client.js", () => ({

@@ -17,6 +17,7 @@ import type {
   PersonThumbnailRecord
 } from "@treemich/shared";
 import { prisma } from "../db/client.js";
+import { canonicalBirthIsoDate } from "../lifeEvents/canonicalBirth.js";
 import { HttpConflictError, HttpNotFoundError } from "../lifeEvents/errors.js";
 import { resolveDisplayNameForPerson } from "../personNames/service.js";
 import { comparePersonSearchSortKeys, personRecordSearchSortKey } from "./personSearchRank.js";
@@ -29,9 +30,25 @@ import type { ProfileResolver } from "./profileResolver.js";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
+type BirthEventRow = {
+  id: string;
+  createdAt: Date;
+  year: number | null;
+  month: number | null;
+  day: number | null;
+};
+
 type PersonWithIncludes = PersonProfile & {
   externalIdentities: PersonExternalIdentity[];
   thumbnails: PersonThumbnail[];
+  /** BIRTH life events, when the query selected them (see `birthEventsInclude`). */
+  lifeEvents?: BirthEventRow[];
+};
+
+/** Prisma include for the BIRTH events `personToJson` needs to fill `birthDate`. */
+const birthEventsInclude = {
+  where: { eventType: "BIRTH" as const },
+  select: { id: true, createdAt: true, year: true, month: true, day: true }
 };
 
 export type ImmichExternalIdentityNameSyncResult = {
@@ -99,7 +116,12 @@ export const personToJson = (
     id: person.id,
     name: displayName,
     displayName: displayName === fallbackName(person) ? null : displayName,
-    birthDate: options?.birthDate ?? null,
+    birthDate:
+      options?.birthDate !== undefined
+        ? options.birthDate
+        : person.lifeEvents
+          ? canonicalBirthIsoDate(person.lifeEvents)
+          : null,
     thumbnailPath: thumbnail?.storageUrl ?? null,
     profile: {
       id: person.id,
@@ -164,7 +186,8 @@ export class PersonService implements ProfileResolver {
       where: q ? buildPersonListSearchWhere(userId, q) : { userId },
       include: {
         externalIdentities: true,
-        thumbnails: { orderBy: { updatedAt: "desc" }, take: 1 }
+        thumbnails: { orderBy: { updatedAt: "desc" }, take: 1 },
+        lifeEvents: birthEventsInclude
       },
       orderBy: [{ surname: "asc" }, { givenName: "asc" }, { createdAt: "asc" }]
     });
@@ -227,7 +250,8 @@ export class PersonService implements ProfileResolver {
       where: buildPersonListSearchWhere(userId, q),
       include: {
         externalIdentities: true,
-        thumbnails: { orderBy: { updatedAt: "desc" }, take: 1 }
+        thumbnails: { orderBy: { updatedAt: "desc" }, take: 1 },
+        lifeEvents: birthEventsInclude
       }
     });
     const records = rows.map((row) => personToJson(row));

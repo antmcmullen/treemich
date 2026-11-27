@@ -12,6 +12,8 @@ import {
   type LinkedAuthenticatedRequestContext
 } from "./auth/service.js";
 import { TreemichAuthError } from "./auth/service.js";
+import { OpenIdClientProvider, type OidcProvider } from "./auth/oidc/provider.js";
+import { getOidcSettings } from "./config/env.js";
 import { CooccurrenceService } from "./cooccurrence/service.js";
 import { ImmichClientFactory } from "./integrations/immich/factory.js";
 import { LifeEventService } from "./lifeEvents/service.js";
@@ -29,6 +31,8 @@ import { ValidationFindingService } from "./validation/validationFindingService.
 /** Service container attached to each Fastify instance (`app.services`). */
 export type AppServices = {
   authService: AuthService;
+  /** OpenID Connect provider client; absent when SSO is not configured. */
+  oidcProvider?: OidcProvider | null;
   cooccurrenceService: CooccurrenceService;
   immichClientFactory: ImmichClientFactory;
   relationshipService: RelationshipService;
@@ -49,8 +53,10 @@ export const buildServices = (): AppServices => {
   const personService = new PersonService();
   const lifeEventService = new LifeEventService(personService);
   const relationshipService = new RelationshipService(personService, lifeEventService);
+  const oidcSettings = getOidcSettings();
   return {
     authService: new AuthService(),
+    oidcProvider: oidcSettings ? new OpenIdClientProvider(oidcSettings) : null,
     cooccurrenceService: new CooccurrenceService(),
     immichClientFactory: new ImmichClientFactory(),
     personService,

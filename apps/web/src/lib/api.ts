@@ -5,6 +5,7 @@
  */
 
 import type {
+  AuthProviders,
   AuthState,
   AuthUser,
   CreateFocusShareBody,
@@ -78,6 +79,7 @@ import type {
 
 /** Re-exported `@treemich/shared` types for modules that depend only on the web API layer. */
 export type {
+  AuthProviders,
   AuthState,
   AuthUser,
   CreateFocusShareBody,
@@ -291,6 +293,27 @@ export const login = async (
   await ensureOk(response, "Login failed");
   return (await response.json()) as AuthState;
 };
+
+const passwordOnlyProviders: AuthProviders = { passwordLogin: true, oidc: null };
+
+/**
+ * `GET /auth/providers` — the sign-in methods the login screen offers. Falls back to password-only when the call
+ * fails (for example an older API without SSO), so the login screen always renders.
+ */
+export const getAuthProviders = async (): Promise<AuthProviders> => {
+  try {
+    const response = await fetch(`${treemichApi}/auth/providers`, withSession({ cache: "no-store" }));
+    if (!response.ok) {
+      return passwordOnlyProviders;
+    }
+    return (await response.json()) as AuthProviders;
+  } catch {
+    return passwordOnlyProviders;
+  }
+};
+
+/** Full-page navigation target that starts SSO sign-in (`GET /auth/oidc/login`). */
+export const oidcLoginUrl = `${treemichApi}/auth/oidc/login`;
 
 /** `POST /auth/immich/link` — validate and store optional Immich provider credentials. */
 export const linkImmichAccount = async (email: string, password: string): Promise<LinkStatus> => {

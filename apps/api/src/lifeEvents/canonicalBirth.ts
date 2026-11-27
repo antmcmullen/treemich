@@ -156,6 +156,21 @@ export const applyCanonicalBirth = async (
   return canonicalBirthOutcome(normalized, canonical, decision);
 };
 
+/**
+ * ISO `YYYY-MM-DD` for a person's canonical birth, or null when there is none or it lacks a full date.
+ * Feeds `PersonRecord.birthDate` in people lists, which the web shows as "Birth date".
+ */
+export const canonicalBirthIsoDate = (
+  rows: readonly (CanonicalBirthDate & { id: string; createdAt: Date })[]
+): string | null => {
+  const canonical = selectCanonicalBirth(rows);
+  if (!canonical || canonical.year == null || canonical.month == null || canonical.day == null) {
+    return null;
+  }
+  const pad = (value: number, width: number) => String(value).padStart(width, "0");
+  return `${pad(canonical.year, 4)}-${pad(canonical.month, 2)}-${pad(canonical.day, 2)}`;
+};
+
 export const previewCanonicalParts = (canonical: CanonicalBirthDate | null): CanonicalBirthDate => ({
   year: canonical?.year ?? null,
   month: canonical?.month ?? null,
