@@ -43,7 +43,12 @@ type ImmichClientOptions = {
   timeoutMs?: number;
   maxRetries?: number;
   retryBaseDelayMs?: number;
+  /** Most images one co-occurrence count reads, newest first (default {@link defaultMaxAssetsWithPeople}). */
+  maxAssetsWithPeople?: number;
 };
+
+/** High enough for a large family library; each image read costs only its ID and its people's IDs. */
+export const defaultMaxAssetsWithPeople = 250_000;
 
 export class ImmichAuthenticationError extends Error {
   readonly statusCode = 401;
@@ -129,6 +134,7 @@ export class ImmichClient {
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
   private readonly retryBaseDelayMs: number;
+  private readonly maxAssetsWithPeople: number;
   private peopleCache:
     | {
         expiresAt: number;
@@ -143,7 +149,6 @@ export class ImmichClient {
   private readonly maxThumbnailBytes = 2 * 1024 * 1024;
   private readonly metadataPageSize = 1000;
   private readonly metadataRequestConcurrency = 2;
-  private readonly defaultMaxAssetsWithPeople = 25_000;
   private thumbnailCacheBytes = 0;
   private thumbnailCache = new Map<
     string,
@@ -161,6 +166,7 @@ export class ImmichClient {
     this.timeoutMs = options.timeoutMs ?? 8_000;
     this.maxRetries = Math.max(0, options.maxRetries ?? 2);
     this.retryBaseDelayMs = Math.max(25, options.retryBaseDelayMs ?? 200);
+    this.maxAssetsWithPeople = Math.max(1, options.maxAssetsWithPeople ?? defaultMaxAssetsWithPeople);
   }
 
   clearExpiredCacheEntries(now = Date.now()) {
@@ -366,8 +372,15 @@ export class ImmichClient {
     return { contentType, data };
   }
 
-  async listAssetsWithPeople(maxAssets = this.defaultMaxAssetsWithPeople): Promise<ImmichAssetPeople[]> {
-    const itemsByPage = new Map<number, unknown[]>();
+  /**
+   * Images that show at least two people, read page by page (newest first) up to `maxAssets` images.
+   * Each page is reduced to IDs as it arrives, so a large library doesn't hold every full asset in memory.
+   */
+  async listAssetsWithPeople(maxAssets = this.maxAssetsWithPeople): Promise<ImmichAssetPeople[]> {
+    const pagesByNumber = new Map<
+      number,
+      { imageCount: number; assets: Array<{ index: number; asset: ImmichAssetPeople }> }
+    >();
     const queuedPages = new Set<number>([1]);
     const fetchedPages = new Set<number>();
     const pageQueue: number[] = [1];
@@ -417,7 +430,14 @@ export class ImmichClient {
         return;
       }
 
-      itemsByPage.set(page, pageItems);
+      const assets: Array<{ index: number; asset: ImmichAssetPeople }> = [];
+      pageItems.forEach((item, index) => {
+        const asset = this.toAssetPeople(item);
+        if (asset) {
+          assets.push({ index, asset });
+        }
+      });
+      pagesByNumber.set(page, { imageCount: pageItems.length, assets });
       bufferedItemCount += pageItems.length;
       if (bufferedItemCount >= maxAssets) {
         return;
@@ -448,14 +468,21 @@ export class ImmichClient {
     });
     await Promise.all(workers);
 
-    const allItems = [...itemsByPage.entries()]
-      .sort(([leftPage], [rightPage]) => leftPage - rightPage)
-      .flatMap(([, items]) => items)
-      .slice(0, maxAssets);
-
-    return allItems
-      .map((item) => this.toAssetPeople(item))
-      .filter((item): item is ImmichAssetPeople => item !== null);
+    // Keep only images within the first `maxAssets` read, in page order.
+    const result: ImmichAssetPeople[] = [];
+    let imagesLeft = maxAssets;
+    for (const [, page] of [...pagesByNumber.entries()].sort(([left], [right]) => left - right)) {
+      if (imagesLeft <= 0) {
+        break;
+      }
+      for (const { index, asset } of page.assets) {
+        if (index < imagesLeft) {
+          result.push(asset);
+        }
+      }
+      imagesLeft -= page.imageCount;
+    }
+    return result;
   }
 
   private toAssetPeople(item: unknown): ImmichAssetPeople | null {

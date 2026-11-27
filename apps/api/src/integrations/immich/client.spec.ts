@@ -213,6 +213,80 @@ describe("ImmichClient.listAssetsWithPeople", () => {
     expect(assets).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it("counts the image limit against every image read, not just group photos", async () => {
+    const pages = new Map<number, MetadataPayload>([
+      [
+        1,
+        {
+          assets: {
+            items: [
+              { id: "asset-1", people: [{ id: "p1" }, { id: "p2" }] },
+              { id: "asset-2", people: [{ id: "p1" }] }
+            ],
+            nextPage: 2
+          }
+        }
+      ],
+      [
+        2,
+        {
+          assets: {
+            items: [
+              { id: "asset-3", people: [{ id: "p1" }, { id: "p3" }] },
+              { id: "asset-4", people: [{ id: "p2" }, { id: "p3" }] }
+            ],
+            nextPage: 3
+          }
+        }
+      ]
+    ]);
+    const fetchMock = vi.fn(async (_url: string, options?: { body?: string }) => {
+      const page = (JSON.parse(options?.body ?? "{}") as { page?: number }).page ?? 1;
+      const payload = pages.get(page);
+      if (!payload) {
+        throw new Error(`Unexpected page ${page}`);
+      }
+      return metadataResponse(payload);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ImmichClient({
+      baseUrl: "http://immich.local",
+      accessToken: "token",
+      maxAssetsWithPeople: 3
+    });
+
+    const assets = await client.listAssetsWithPeople();
+    expect(assets.map((asset) => asset.assetId)).toEqual(["asset-1", "asset-3"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads past the old 25,000-image ceiling by default", async () => {
+    const pageSize = 1000;
+    const lastPage = 30;
+    const fetchMock = vi.fn(async (_url: string, options?: { body?: string }) => {
+      const page = (JSON.parse(options?.body ?? "{}") as { page?: number }).page ?? 1;
+      const items =
+        page > lastPage
+          ? []
+          : Array.from({ length: pageSize }, (_, index) => ({
+              id: `asset-${page}-${index}`,
+              people: [{ id: "p1" }, { id: "p2" }]
+            }));
+      return metadataResponse({ assets: { items, nextPage: page + 1 } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ImmichClient({
+      baseUrl: "http://immich.local",
+      accessToken: "token"
+    });
+
+    const assets = await client.listAssetsWithPeople();
+    expect(assets).toHaveLength(lastPage * pageSize);
+    expect(assets.at(-1)?.assetId).toBe(`asset-${lastPage}-${pageSize - 1}`);
+  });
 });
 
 describe("loginToImmich", () => {

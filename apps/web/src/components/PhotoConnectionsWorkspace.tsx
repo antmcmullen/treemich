@@ -77,7 +77,11 @@ const describeStatus = (status: CooccurrenceJobResponse | null) => {
   if (job.status === "FAILED") {
     return `The last count failed${job.errorMessage ? `: ${job.errorMessage}` : ""}. ${scheduleText}`;
   }
-  const photos = job.sourcePhotoCount != null ? ` from ${plural(job.sourcePhotoCount, "photo")}` : "";
+  // The job keeps only images with two or more linked faces, so that is what this number counts.
+  const photos =
+    job.sourcePhotoCount != null
+      ? ` from ${plural(job.sourcePhotoCount, "photo")} with two or more people`
+      : "";
   return `Last counted on ${formatDate(job.completedAt) ?? "an unknown date"}${photos}. ${scheduleText}`;
 };
 

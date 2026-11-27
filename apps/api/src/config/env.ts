@@ -71,6 +71,8 @@ const envSchema = z
     IMMICH_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
     IMMICH_HTTP_MAX_RETRIES: z.coerce.number().int().nonnegative().default(2),
     IMMICH_HTTP_RETRY_BASE_DELAY_MS: z.coerce.number().int().positive().default(200),
+    /** Most images one photo co-occurrence count reads from Immich, newest first. */
+    IMMICH_COOCCURRENCE_MAX_ASSETS: z.coerce.number().int().positive().default(250_000),
     WEB_ORIGIN: z.string().url().optional(),
     TREEMICH_TRUST_PROXY: optionalBooleanString,
     TREEMICH_ENCRYPTION_KEY: z
