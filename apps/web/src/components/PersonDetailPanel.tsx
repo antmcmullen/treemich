@@ -45,6 +45,7 @@ import {
   getRelativeRelationshipLabel,
   indexRelationshipsByPersonId
 } from "./personDetail/personDetailHelpers";
+import { PhotoConnectionsSection, type LoadPersonPhotoEdges } from "./personDetail/PhotoConnectionsSection";
 import { RelativesSection } from "./personDetail/RelativesSection";
 import type { RelativeItem } from "./personDetail/types";
 import { DestructiveConfirmDialog } from "./DestructiveConfirmDialog";
@@ -59,6 +60,7 @@ const DEFAULT_COLLAPSED_SECTIONS = {
   names: true,
   relatives: false,
   inLaws: false,
+  photos: false,
   suggestions: false,
   friends: false,
   pets: false,
@@ -160,6 +162,8 @@ export type PersonDetailPanelProps = {
     patch: Partial<Pick<ResearchTaskRecord, "title" | "status" | "dueDate" | "notes" | "personId">>
   ) => Promise<void>;
   onResearchTaskDelete?: (taskId: string) => Promise<void>;
+  /** Loads Immich photo co-occurrence for a person; the "Photos together" section shows only when set. */
+  loadPhotoConnections?: LoadPersonPhotoEdges;
   /** When set, merged into collapsed-section state when the selected person changes (true = collapsed). */
   sectionCollapsedOverrides?: Partial<SectionCollapsedState>;
 };
@@ -238,6 +242,7 @@ const PersonDetailPanelComponent = ({
   onResearchTaskCreate,
   onResearchTaskUpdate,
   onResearchTaskDelete,
+  loadPhotoConnections,
   sectionCollapsedOverrides
 }: Props) => {
   const [editingRelationshipKey, setEditingRelationshipKey] = useState<string | null>(null);
@@ -344,6 +349,32 @@ const PersonDetailPanelComponent = ({
     () => (person ? computeInLawFamily(person.id, people, relationships, excludedInLawIds) : []),
     [excludedInLawIds, people, person, relationships]
   );
+
+  const relationLabelByPersonId = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const relative of relatives) {
+      if (!labels.has(relative.relatedId)) {
+        labels.set(relative.relatedId, relative.relationshipLabel);
+      }
+    }
+    for (const member of extendedFamily) {
+      if (!labels.has(member.personId)) {
+        labels.set(member.personId, member.label);
+      }
+    }
+    for (const member of inLaws) {
+      if (!labels.has(member.personId)) {
+        labels.set(
+          member.personId,
+          getInLawRelationshipLabel(
+            member.label,
+            peopleById.get(member.personId)?.profile?.gender ?? "UNKNOWN"
+          )
+        );
+      }
+    }
+    return labels;
+  }, [extendedFamily, inLaws, peopleById, relatives]);
 
   const suggestions = useMemo<RelationshipSuggestion[]>(
     () => (person ? computeSuggestions(person.id, people, relationships, dismissedSuggestionKeys) : []),
@@ -810,6 +841,24 @@ const PersonDetailPanelComponent = ({
             onStartDeleting={startDeletingRelationship}
             emptyMessage="No in-laws found yet."
           />
+          {loadPhotoConnections && immichIdentity ? (
+            <PhotoConnectionsSection
+              key={person.id}
+              person={person}
+              peopleById={peopleById}
+              relationships={relationships}
+              relationLabelByPersonId={relationLabelByPersonId}
+              immichBaseUrl={immichBaseUrl}
+              loadEdges={loadPhotoConnections}
+              isCollapsed={collapsedSections.photos}
+              onToggleCollapsed={() => toggleSectionCollapsed("photos")}
+              onFocusPerson={onFocusPerson}
+              onAddFriend={(otherPersonId) =>
+                onCreateRelationship(person.id, otherPersonId, RELATIONSHIP_TYPES.friendOf)
+              }
+              isSavingRelationship={isSavingRelationship}
+            />
+          ) : null}
           {person ? (
             <CollapsibleSection
               sectionKey="names"
