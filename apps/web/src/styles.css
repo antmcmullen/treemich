@@ -3022,6 +3022,20 @@ body {
   width: 100%;
 }
 
+.photo-connection-count {
+  margin: 0 0 0 46px;
+}
+
+.photo-connection-count a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.photo-pair-card .relative-actions {
+  flex-wrap: nowrap;
+}
+
 .suggestion-actions {
   flex-wrap: nowrap;
   flex-shrink: 0;

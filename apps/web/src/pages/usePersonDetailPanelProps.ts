@@ -1,8 +1,14 @@
 import { useCallback, useMemo } from "react";
 import type { RelationshipRecord } from "../lib/api";
+import { getPersonCooccurrenceEdges } from "../lib/api";
 import type { PersonDetailPanelProps } from "../components/PersonDetailPanel";
 import { usePeopleGraphData } from "./PeopleGraphDataContext";
 import { usePersonDetail } from "./PersonDetailContext";
+
+const loadPhotoConnections: NonNullable<PersonDetailPanelProps["loadPhotoConnections"]> = (
+  personId,
+  { signal }
+) => getPersonCooccurrenceEdges(personId, { signal });
 
 /**
  * Builds the full prop object for {@link PersonDetailPanelWithProps} from graph + detail contexts.
@@ -86,7 +92,8 @@ export const usePersonDetailPanelProps = (): PersonDetailPanelProps => {
       familyLifeEventsById: detail.familyLifeEventsById,
       onFamilyLifeEventCreate: detail.handleFamilyLifeEventCreate,
       onFamilyLifeEventPatch: detail.handleFamilyLifeEventPatch,
-      onFamilyLifeEventDelete: detail.handleFamilyLifeEventDelete
+      onFamilyLifeEventDelete: detail.handleFamilyLifeEventDelete,
+      loadPhotoConnections
     }),
     [detail, graph, onDeleteRelationship]
   );

@@ -82,6 +82,11 @@ const DuplicateReviewWorkspace = lazy(() =>
     default: module.DuplicateReviewWorkspace
   }))
 );
+const PhotoConnectionsWorkspace = lazy(() =>
+  import("../components/PhotoConnectionsWorkspace").then((module) => ({
+    default: module.PhotoConnectionsWorkspace
+  }))
+);
 const ReportsWorkspace = lazy(() =>
   import("../components/reports/ReportsWorkspace").then((module) => ({ default: module.ReportsWorkspace }))
 );
@@ -95,6 +100,7 @@ export type WorkspaceId =
   | "tree"
   | "profile"
   | "duplicates"
+  | "connections"
   | "research"
   | "evidence"
   | "interchange"
@@ -113,6 +119,7 @@ const WORKSPACE_ITEMS: WorkspaceItem[] = [
   { id: "tree", label: "Tree", iconLabel: "TR" },
   { id: "profile", label: "Profile", iconLabel: "PR" },
   { id: "duplicates", label: "Duplicates", iconLabel: "DQ" },
+  { id: "connections", label: "Connections", iconLabel: "CN" },
   { id: "research", label: "Research", iconLabel: "RS" },
   { id: "evidence", label: "Evidence", iconLabel: "EV" },
   { id: "interchange", label: "Interchange", iconLabel: "GX" },
@@ -128,6 +135,8 @@ const noRelationshipsGraphFilterVisibility: NonNullable<UserPreferences["graphFi
   friends: false,
   pets: false
 };
+
+const emptyDismissedKeys: string[] = [];
 
 const isWorkspaceEnabled = (workspaceId: WorkspaceId) =>
   WORKSPACE_ITEMS.find((item) => item.id === workspaceId)?.disabledReason == null;
@@ -730,6 +739,21 @@ const PeoplePageShell = ({ onReplayOnboardingTutorial }: PeoplePageShellProps) =
           onRecompute={review.handleDuplicateRecompute}
           onDismiss={review.handleDuplicateDismiss}
           onMerge={review.handleDuplicateMerge}
+          onOpenPerson={openPersonFromResearch}
+        />
+      );
+    }
+
+    if (activeWorkspace === "connections") {
+      return (
+        <PhotoConnectionsWorkspace
+          people={graph.people}
+          relationships={graph.relationships}
+          dismissedKeys={graph.savedPreferences?.dismissedSuggestions ?? emptyDismissedKeys}
+          immichBaseUrl={graph.immichBaseUrl}
+          isSavingRelationship={graph.isSavingRelationship}
+          onCreateRelationship={graph.onCreateRelationship}
+          onDismiss={graph.onDismissSuggestion}
           onOpenPerson={openPersonFromResearch}
         />
       );

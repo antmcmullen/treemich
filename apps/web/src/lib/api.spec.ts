@@ -15,6 +15,9 @@ import {
   fetchFamilyGroupSheetReport,
   getFamilyLifeEvents,
   getDuplicateCandidates,
+  getCooccurrenceStatus,
+  getPersonCooccurrenceEdges,
+  getPhotoCooccurrence,
   getPlacesMap,
   getPersonTimeline,
   getResearchTasks,
@@ -23,6 +26,7 @@ import {
   getPersonLifeEventValidation,
   getPersonLifeEvents,
   immichPersonUrl,
+  immichPhotosTogetherUrl,
   createEvidenceMediaObject,
   createEvidenceMediaLink,
   createEvidenceRepository,
@@ -167,6 +171,76 @@ describe("session-auth API helpers", () => {
     const result = await login("admin@treemich.local", "treemich-pass!");
     expect(result.authenticated).toBe(true);
     expect(result.user?.passwordChangeRequired).toBe(true);
+  });
+});
+
+describe("photo co-occurrence API helpers", () => {
+  const originalFetch = globalThis.fetch;
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("loads every edge for one person in a single page", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      jsonResponse({
+        edges: [{ id: "e1", personAId: "p1", personBId: "p2", sharedPhotos: 3 }],
+        nextCursor: null
+      })
+    );
+
+    const edges = await getPersonCooccurrenceEdges("p 1");
+
+    expect(edges).toHaveLength(1);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/people/cooccurrence/edges?personId=p+1&limit=2000",
+      expect.objectContaining({ credentials: "include", cache: "no-store" })
+    );
+  });
+
+  it("loads pairs above a shared-photo threshold and the job status", async () => {
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(jsonResponse({ clusters: [], edges: [], computedAt: "x", sourcePhotoCount: 0 }))
+      .mockResolvedValueOnce(
+        jsonResponse({ job: null, schedule: { refreshEnabled: true, refreshIntervalDays: 7 } })
+      );
+
+    await getPhotoCooccurrence(3);
+    const status = await getCooccurrenceStatus();
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      "/api/people/cooccurrence?minSharedPhotos=3",
+      expect.objectContaining({ credentials: "include" })
+    );
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      "/api/people/cooccurrence/status",
+      expect.objectContaining({ credentials: "include" })
+    );
+    expect(status.job).toBeNull();
+  });
+});
+
+describe("immichPhotosTogetherUrl", () => {
+  it("builds an Immich search for photos containing every person", () => {
+    const url = immichPhotosTogetherUrl(["a-1", "b-2"], "https://photos.example/api/");
+    expect(url).toBe(
+      `https://photos.example/search?query=${encodeURIComponent(JSON.stringify({ personIds: ["a-1", "b-2"] }))}`
+    );
+  });
+
+  it("returns null without a base URL or with fewer than two people", () => {
+    expect(immichPhotosTogetherUrl(["a-1", "b-2"], null)).toBeNull();
+    expect(immichPhotosTogetherUrl(["a-1", "b-2"], " /api ")).toBeNull();
+    expect(immichPhotosTogetherUrl(["a-1"], "https://photos.example")).toBeNull();
   });
 });
 

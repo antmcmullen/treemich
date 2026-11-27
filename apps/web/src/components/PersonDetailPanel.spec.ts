@@ -587,3 +587,69 @@ describe("PersonDetailPanelWithProps", () => {
     container.remove();
   });
 });
+
+describe("PersonDetailPanelWithProps photo connections", () => {
+  const immichIdentity = (personId: string) => ({
+    id: `identity-${personId}`,
+    personId,
+    provider: "IMMICH" as const,
+    providerPersonId: `immich-${personId}`,
+    providerBaseUrl: null,
+    displayName: null,
+    thumbnailImportedAt: null,
+    lastSeenAt: null,
+    metadata: {},
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z"
+  });
+  const linkedMe: Person = { ...person("me", "Me"), externalIdentities: [immichIdentity("me")] };
+  const people = [linkedMe, person("spouse", "Spouse"), person("spouse-mom", "Martha"), person("pal", "Pat")];
+
+  it("lists photo companions with tree labels for an Immich-linked person", async () => {
+    const loadPhotoConnections = vi.fn().mockResolvedValue([
+      { personAId: "me", personBId: "spouse", sharedPhotos: 40, score: 0.8 },
+      { personAId: "pal", personBId: "me", sharedPhotos: 6, score: 0.3 },
+      { personAId: "me", personBId: "spouse-mom", sharedPhotos: 2, score: 0.1 }
+    ]);
+    const { container } = renderPanel({ person: linkedMe, people, panelProps: { loadPhotoConnections } });
+    await act(async () => undefined);
+
+    expect(loadPhotoConnections).toHaveBeenCalledWith("me", expect.anything());
+    const list = container.querySelector('ul[aria-label="People in photos with Me"]');
+    const rows = [...(list?.querySelectorAll("li") ?? [])].map((row) => row.textContent ?? "");
+    expect(rows[0]).toContain("Spouse");
+    expect(rows[0]).toContain("40 photos together");
+    expect(rows[1]).toContain("PatNot linked6 photos together");
+    expect(rows[2]).toContain("Martha");
+    expect(rows[2]).not.toContain("Not linked");
+  });
+
+  it("adds an unlinked photo companion as a friend", async () => {
+    const onCreateRelationship = vi.fn().mockResolvedValue(undefined);
+    const loadPhotoConnections = vi
+      .fn()
+      .mockResolvedValue([{ personAId: "pal", personBId: "me", sharedPhotos: 6, score: 0.3 }]);
+    const { container } = renderPanel({
+      person: linkedMe,
+      people,
+      panelProps: { loadPhotoConnections, onCreateRelationship }
+    });
+    await act(async () => undefined);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Add Pat as a friend"]')?.click();
+    });
+    expect(onCreateRelationship).toHaveBeenCalledWith("me", "pal", "FRIEND_OF");
+  });
+
+  it("leaves the section out for people without an Immich link or without a loader", async () => {
+    const loadPhotoConnections = vi.fn().mockResolvedValue([]);
+    const unlinked = renderPanel({ panelProps: { loadPhotoConnections } });
+    await act(async () => undefined);
+    expect(unlinked.container.textContent).not.toContain("Photos together");
+    expect(loadPhotoConnections).not.toHaveBeenCalled();
+
+    const noLoader = renderPanel({ person: linkedMe, people });
+    expect(noLoader.container.textContent).not.toContain("Photos together");
+  });
+});
