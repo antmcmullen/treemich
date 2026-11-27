@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import type { FamilyChildPedigree } from "./families.js";
+import { familyChartShapeValues } from "./graphLayout/familyChart.js";
 import type { PersonDuplicateRecomputeResponse } from "./personDuplicates.js";
 import type { AgeFilter, InterpreterIntent } from "./search/interpreter.js";
 
@@ -124,6 +125,10 @@ export type PersonRecord = {
   /** Treemich primary or formatted display; prefer over `name` for UI when set. */
   displayName?: string | null;
   birthDate?: string | null;
+  /** Year of the person's earliest dated BIRTH life event (people list, create and update responses). */
+  birthYear?: number | null;
+  /** Year of the person's earliest dated DEATH life event (people list, create and update responses). */
+  deathYear?: number | null;
   thumbnailPath?: string | null;
   profile?: TreemichPersonProfile | null;
   externalIdentities?: PersonExternalIdentityRecord[];
@@ -240,6 +245,7 @@ export * from "./evidence.js";
 export * from "./validationFindings.js";
 export * from "./reports.js";
 export * from "./graphLayout/generationTree.js";
+export * from "./graphLayout/familyChart.js";
 
 /** Weighted edge between two people derived from shared photo appearances. */
 export type PhotoCooccurrenceEdge = {
@@ -500,6 +506,11 @@ export const familyViewStyleValues = [
   "cleaned3D"
 ] as const;
 export const familyViewStyleSchema = z.enum(familyViewStyleValues);
+/** Which tree surface the Tree workspace shows: the 3D graph or the simple 2D family chart. */
+export const graphViewModeValues = ["graph3d", "familyChart"] as const;
+export const graphViewModeSchema = z.enum(graphViewModeValues);
+export type GraphViewMode = z.infer<typeof graphViewModeSchema>;
+export const defaultGraphViewMode: GraphViewMode = "graph3d";
 /** How edges are routed in 2D overlays (when applicable). */
 export const graphLineRoutingStyleValues = ["orthogonal", "direct"] as const;
 export const graphLineRoutingStyleSchema = z.enum(graphLineRoutingStyleValues);
@@ -597,7 +608,11 @@ export const userPreferencesSchema = z.object({
   treeLayoutPreferences: treeLayoutPreferencesSchema.optional(),
   /** When true, natural-language people search also matches stored alternate names. */
   searchIncludeAlternateNames: z.boolean().optional(),
-  onboardingTutorial: onboardingTutorialSchema.optional()
+  onboardingTutorial: onboardingTutorialSchema.optional(),
+  /** Tree workspace surface (3D graph or 2D family chart). */
+  graphViewMode: graphViewModeSchema.optional(),
+  /** Shape of the 2D family chart. */
+  familyChartShape: z.enum(familyChartShapeValues).optional()
 });
 
 export type GraphFilterVisibility = z.infer<typeof graphFilterVisibilitySchema>;

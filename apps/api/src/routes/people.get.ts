@@ -80,7 +80,8 @@ export const registerPeopleGetRoute = (app: FastifyInstance) => {
         surname: person.profile.surname ?? null
       });
     }
-    return reply.code(201).send(person);
+    const [withYears] = await app.services.personService.withVitalYears(auth.user.id, [person]);
+    return reply.code(201).send(withYears);
   });
 
   app.get("/people/:id", async (request) => {
@@ -107,7 +108,8 @@ export const registerPeopleGetRoute = (app: FastifyInstance) => {
         surname: person.profile?.surname ?? null
       });
     }
-    return person;
+    const [withYears] = await app.services.personService.withVitalYears(auth.user.id, [person]);
+    return withYears;
   });
 
   app.delete("/people/:id", async (request, reply) => {

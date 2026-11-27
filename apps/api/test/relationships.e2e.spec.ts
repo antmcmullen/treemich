@@ -394,7 +394,9 @@ describe("Treemich API routes", () => {
         listExternalIdentities: listExternalIdentitiesMock,
         addExternalIdentity: addExternalIdentityMock,
         deleteExternalIdentity: deleteExternalIdentityMock,
-        delete: deletePersonServiceMock
+        delete: deletePersonServiceMock,
+        // Vital years come from life events; pass records through unchanged in route tests.
+        withVitalYears: async (_userId: string, records: unknown[]) => records
       } as unknown as AppServices["personService"],
       personDuplicateService: {
         list: listDuplicateCandidatesMock,

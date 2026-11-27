@@ -11,13 +11,27 @@ import {
   type KeyboardEvent,
   type MutableRefObject
 } from "react";
-import { defaultGraphRenderLimit, maxGraphRenderLimit, minGraphRenderLimit } from "@treemich/shared";
+import {
+  defaultFamilyChartShape,
+  defaultGraphRenderLimit,
+  maxGraphRenderLimit,
+  minGraphRenderLimit,
+  type FamilyChartShape,
+  type GraphViewMode
+} from "@treemich/shared";
 import type { UserPreferences } from "../lib/api";
 import { getLocalStorageItem, setLocalStorageItem } from "../lib/safeLocalStorage";
 import { parseMapUiSnapshot, type MapUiSnapshot } from "../lib/workspaceUiState";
 import { CreatePersonDialog } from "../components/CreatePersonDialog";
 import { MapPlacesPanel } from "../components/MapPlacesPanel";
 import { PeopleGraph3D } from "../components/PeopleGraph3D";
+import { FamilyChartView } from "../components/familyChart/FamilyChartView";
+import {
+  cacheGraphViewMode,
+  GraphViewToggle,
+  readCachedGraphViewMode,
+  resolveGraphViewMode
+} from "../components/graph/GraphViewToggle";
 import type {
   PeopleGraph3DHandlersBundle,
   PeopleGraph3DModelBundle,
@@ -213,15 +227,42 @@ const GraphContainer = memo(
   ({
     activeWorkspace,
     layoutResizeSignal,
-    onNewPerson
+    onNewPerson,
+    onOpenPersonDetail
   }: {
     activeWorkspace: WorkspaceId;
     layoutResizeSignal: number;
     onNewPerson: () => void;
+    onOpenPersonDetail: () => void;
   }) => {
     const graph = usePeopleGraphData();
     const { status } = useToast();
     const isTreeView = activeWorkspace === "tree";
+    const [cachedViewMode] = useState(readCachedGraphViewMode);
+    const viewMode = resolveGraphViewMode(graph.savedPreferences, cachedViewMode);
+    const preferencesLoaded = graph.savedPreferences !== null;
+    useEffect(() => {
+      if (preferencesLoaded) {
+        cacheGraphViewMode(viewMode);
+      }
+    }, [preferencesLoaded, viewMode]);
+    const familyChartShape = graph.savedPreferences?.familyChartShape ?? defaultFamilyChartShape;
+    const { onPreferencesChange, setSelectedPersonId } = graph;
+    const handleViewModeChange = useCallback(
+      (graphViewMode: GraphViewMode) => void onPreferencesChange({ graphViewMode }),
+      [onPreferencesChange]
+    );
+    const handleFamilyChartShapeChange = useCallback(
+      (shape: FamilyChartShape) => void onPreferencesChange({ familyChartShape: shape }),
+      [onPreferencesChange]
+    );
+    const handleOpenPerson = useCallback(
+      (personId: string) => {
+        setSelectedPersonId(personId);
+        onOpenPersonDetail();
+      },
+      [onOpenPersonDetail, setSelectedPersonId]
+    );
     const noRelationshipsDefaultsEnabled =
       graph.relationships.length === 0 && !graph.savedPreferences?.graphFilterVisibility;
 
@@ -326,13 +367,32 @@ const GraphContainer = memo(
         aria-hidden={!isTreeView}
         inert={!isTreeView ? true : undefined}
       >
-        <PeopleGraph3D
-          graphModel={graphModel}
-          graphStatus={graphStatus}
-          graphPreferences={graphPreferences}
-          graphHandlers={graphHandlers}
-          graphViewState={graphViewState}
-        />
+        <GraphViewToggle value={viewMode} onChange={handleViewModeChange} />
+        {viewMode === "familyChart" ? (
+          <FamilyChartView
+            people={graph.people}
+            relationships={graph.relationships}
+            selectedPersonId={graph.selectedPersonId}
+            shape={familyChartShape}
+            isLoading={graph.isLoading}
+            loadError={graph.loadError}
+            isSavingRelationship={graph.isSavingRelationship}
+            onShapeChange={handleFamilyChartShapeChange}
+            onSelectPerson={setSelectedPersonId}
+            onOpenPerson={handleOpenPerson}
+            onCreatePerson={graph.createPersonInGraph}
+            onCreateRelationship={graph.onCreateRelationship}
+            onNewPerson={onNewPerson}
+          />
+        ) : (
+          <PeopleGraph3D
+            graphModel={graphModel}
+            graphStatus={graphStatus}
+            graphPreferences={graphPreferences}
+            graphHandlers={graphHandlers}
+            graphViewState={graphViewState}
+          />
+        )}
       </section>
     );
   }
@@ -449,6 +509,8 @@ const PeoplePageShell = ({ onReplayOnboardingTutorial }: PeoplePageShellProps) =
   useEffect(() => {
     setLocalStorageItem(LEFT_PANE_OPEN_STORAGE_KEY, leftPaneOpen ? "true" : "false");
   }, [leftPaneOpen]);
+
+  const openContextPane = useCallback(() => setContextPaneOpen(true), []);
 
   useEffect(() => {
     setLocalStorageItem(CONTEXT_OPEN_STORAGE_KEY, contextPaneOpen ? "true" : "false");
@@ -844,6 +906,7 @@ const PeoplePageShell = ({ onReplayOnboardingTutorial }: PeoplePageShellProps) =
             activeWorkspace={activeWorkspace}
             layoutResizeSignal={layoutResizeSignal}
             onNewPerson={() => openCreatePersonDialog()}
+            onOpenPersonDetail={openContextPane}
           />
           <section
             className={`workspace-main-stack workspace-main-stack--places ${

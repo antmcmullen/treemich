@@ -24,11 +24,12 @@ import {
 } from "../lib/workspaceUiState";
 import { PerspectiveCamera, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import { searchRelationships, type Person, type RelationshipType, type UserPreferences } from "../lib/api";
+import { searchRelationships, type Person, type UserPreferences } from "../lib/api";
 import type { PeopleGraph3DBundledProps } from "./peopleGraph3dSceneBundles";
 import { AddRelativePopup } from "./graph/AddRelativePopup";
 import type { AddRelativeSubmitPayload } from "./graph/AddRelativePopup";
-import { findPersonBySearchTerm, useGraphSearch } from "./graph/useGraphSearch";
+import { useGraphSearch } from "./graph/useGraphSearch";
+import { submitAddRelative } from "./graph/addRelativeSubmit";
 import { useGraphCamera } from "./graph/useGraphCamera";
 import { useGraphSelection } from "./graph/useGraphSelection";
 import { GraphCanvasScene } from "./graph/GraphCanvasScene";
@@ -59,7 +60,6 @@ import { GraphLayerControls } from "./graph/GraphLayerControls";
 import { TreeLayoutControls } from "./graph/TreeLayoutControls";
 import { useGraphKeyboardNavigation } from "./graph/useGraphKeyboardNavigation";
 import { getPersonDisplayLabel } from "../lib/personDisplay";
-import { RELATIONSHIP_TYPES } from "../lib/relationshipConstants";
 
 type Props = PeopleGraph3DBundledProps;
 
@@ -135,18 +135,7 @@ const thumbnailCacheKeyForPerson = (person: Person): string | undefined => {
 
 const TREE_LAYOUT_PREFERENCES_SAVE_DEBOUNCE_MS = 500;
 
-export const resolveAddRelativeRelationshipType = (
-  slot: AddRelativeSlot,
-  selectedRelationshipType?: RelationshipType
-): RelationshipType => {
-  if (slot === "parent") {
-    return RELATIONSHIP_TYPES.childOf;
-  }
-  if (slot === "child") {
-    return RELATIONSHIP_TYPES.parentOf;
-  }
-  return selectedRelationshipType ?? RELATIONSHIP_TYPES.siblingOf;
-};
+export { resolveAddRelativeRelationshipType } from "./graph/addRelativeSubmit";
 
 const resolveInitialGraphViewPreferences = (
   savedPreferences: UserPreferences | null,
@@ -682,40 +671,16 @@ const PeopleGraph3DComponent = ({
     if (!addRelativeIntent) {
       throw new Error("Select a person first.");
     }
-
-    let targetId: string;
-    let targetName: string;
-    if (payload.type === "new") {
-      const newPerson = await onCreatePerson({
-        givenName: payload.givenName,
-        surname: payload.surname,
-        gender: payload.gender
-      });
-      targetId = newPerson.id;
-      targetName = getPersonDisplayLabel(newPerson);
-    } else {
-      const match = findPersonBySearchTerm(people, payload.personName);
-      if (!payload.personName.trim()) {
-        throw new Error("Type a person name.");
-      }
-      if (!match) {
-        throw new Error(`No person found for "${payload.personName}"`);
-      }
-      if (match.id === addRelativeIntent.selectedPersonId) {
-        throw new Error("Choose a different person.");
-      }
-      targetId = match.id;
-      targetName = match.name;
-    }
-
-    const nextRelationshipType = resolveAddRelativeRelationshipType(
-      addRelativeIntent.slot,
-      payload.relationshipType
-    );
-
-    await onCreateRelationship(addRelativeIntent.selectedPersonId, targetId, nextRelationshipType);
+    const feedback = await submitAddRelative({
+      payload,
+      slot: addRelativeIntent.slot,
+      anchorPersonId: addRelativeIntent.selectedPersonId,
+      people,
+      onCreatePerson,
+      onCreateRelationship
+    });
     setAddRelativeIntent(null);
-    setSearchFeedback(payload.type === "new" ? `Created and added ${targetName}` : `Added ${targetName}`);
+    setSearchFeedback(feedback);
   };
 
   const handleClearSearch = () => {

@@ -288,11 +288,46 @@ describe("PersonService", () => {
       );
     });
 
+    it("adds birth and death years from the earliest dated life events", async () => {
+      mocks.personProfileFindMany.mockResolvedValue([
+        makeProfile(),
+        makeProfile({ id: "pp-2", givenName: "Bob" })
+      ]);
+      mocks.lifeEventFindMany.mockResolvedValue([
+        { personProfileId: "pp-1", eventType: "BIRTH", year: 1930 },
+        { personProfileId: "pp-1", eventType: "BIRTH", year: 1931 },
+        { personProfileId: "pp-1", eventType: "DEATH", year: 2001 }
+      ]);
+
+      const { PersonService } = await import("./service.js");
+      const results = await new PersonService().list("user-1");
+
+      expect(results.find((person) => person.id === "pp-1")).toMatchObject({
+        birthYear: 1930,
+        deathYear: 2001
+      });
+      expect(results.find((person) => person.id === "pp-2")).toMatchObject({
+        birthYear: null,
+        deathYear: null
+      });
+      expect(mocks.lifeEventFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: "user-1",
+            personProfileId: { in: ["pp-1", "pp-2"] },
+            eventType: { in: ["BIRTH", "DEATH"] }
+          })
+        })
+      );
+    });
+
     it("fills birthDate from the person's BIRTH life event", async () => {
       mocks.personProfileFindMany.mockResolvedValue([
         {
           ...makeProfile(),
-          lifeEvents: [{ id: "le-1", createdAt: new Date("2026-01-01T00:00:00Z"), year: 1958, month: 1, day: 19 }]
+          lifeEvents: [
+            { id: "le-1", createdAt: new Date("2026-01-01T00:00:00Z"), year: 1958, month: 1, day: 19 }
+          ]
         },
         makeProfile({ id: "pp-2", givenName: "Bob" })
       ]);

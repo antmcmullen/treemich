@@ -99,6 +99,17 @@ describe("shared enums and preference schemas", () => {
     expect(prefs.focusCollateralDepth).toBe(1);
   });
 
+  it("parses the Tree view mode and family chart shape preferences", () => {
+    const prefs = userPreferencesSchema.parse({
+      graphViewMode: "familyChart",
+      familyChartShape: "ancestors"
+    });
+    expect(prefs.graphViewMode).toBe("familyChart");
+    expect(prefs.familyChartShape).toBe("ancestors");
+    expect(() => userPreferencesSchema.parse({ graphViewMode: "2d" })).toThrow();
+    expect(() => userPreferencesSchema.parse({ familyChartShape: "fan" })).toThrow();
+  });
+
   it("rejects Focus collateral depth above max", () => {
     expect(() => userPreferencesSchema.parse({ focusCollateralDepth: 6 })).toThrow();
   });

@@ -171,7 +171,7 @@ export const canonicalBirthIsoDate = (
   return `${pad(canonical.year, 4)}-${pad(canonical.month, 2)}-${pad(canonical.day, 2)}`;
 };
 
-export const previewCanonicalParts =(canonical: CanonicalBirthDate | null): CanonicalBirthDate => ({
+export const previewCanonicalParts = (canonical: CanonicalBirthDate | null): CanonicalBirthDate => ({
   year: canonical?.year ?? null,
   month: canonical?.month ?? null,
   day: canonical?.day ?? null
