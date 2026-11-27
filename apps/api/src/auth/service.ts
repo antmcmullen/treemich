@@ -41,6 +41,9 @@ type PasswordLoginUser = Prisma.TreemichUserGetPayload<{
 
 const legacySharedUserId = "legacy-shared-user";
 
+/** Where browser links to Immich should point: the public address when set, else the one the API uses. */
+const immichWebUrlFor = (immichBaseUrl: string) => env.IMMICH_PUBLIC_URL ?? immichBaseUrl;
+
 export class TreemichAuthError extends Error {
   readonly statusCode = 401;
 
@@ -375,6 +378,7 @@ export class AuthService {
         ? {
             linked: true,
             immichBaseUrl: linkedAccount.immichBaseUrl,
+            immichWebUrl: immichWebUrlFor(linkedAccount.immichBaseUrl),
             immichEmail: linkedAccount.immichEmail,
             immichName: linkedAccount.immichName
           }
@@ -401,6 +405,7 @@ export class AuthService {
     return {
       linked: true,
       immichBaseUrl,
+      immichWebUrl: immichWebUrlFor(immichBaseUrl),
       immichEmail: login.userEmail,
       immichName: login.name
     } satisfies NonNullable<AuthState["linkStatus"]>;

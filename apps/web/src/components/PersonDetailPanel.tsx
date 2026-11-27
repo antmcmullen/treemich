@@ -121,6 +121,7 @@ export type PersonDetailPanelProps = {
   onImmichIdentityUnlink?: (identityId: string) => Promise<void>;
   onDismissSuggestion: (suggestionKey: string) => void;
   isSavingRelationship: boolean;
+  /** Immich address for links opened in the browser (the person page, photos together). */
   immichBaseUrl?: string | null;
   primaryFamilyUnitByPersonId: Record<string, string>;
   onPrimaryFamilyUnitChange: (personId: string, unitKey: string | null) => void;

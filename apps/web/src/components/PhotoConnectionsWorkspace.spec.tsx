@@ -120,7 +120,7 @@ describe("PhotoConnectionsWorkspace", () => {
     ]);
     expect(rows()[0]?.textContent).toContain("12 photos together");
     expect(host.textContent).toContain("2 pairs not linked");
-    expect(host.textContent).toContain(`from ${(1200).toLocaleString()} photos`);
+    expect(host.textContent).toContain(`from ${(1200).toLocaleString()} photos with two or more people.`);
     expect(host.textContent).toContain("Counts refresh every 7 days");
 
     button("Pat")?.click();

@@ -55,6 +55,8 @@ type RefreshGraphDataOptions = {
 
 type PeopleGraphDataProviderProps = {
   immichBaseUrl: string | null;
+  /** Immich address for links people open in their browser; defaults to `immichBaseUrl`. */
+  immichWebUrl?: string | null;
   currentUserName: string | null;
   children?: ReactNode;
 };
@@ -80,7 +82,10 @@ type PeopleGraphDataContextValue = {
   isSavingSearchPreferences: boolean;
   savingFamilyId: string | null;
   dataRevision: number;
+  /** Immich address the API uses; stored on new face links. Not for browser links: see `immichWebUrl`. */
   immichBaseUrl: string | null;
+  /** Immich address for links people open in their browser (person pages, photo searches). */
+  immichWebUrl: string | null;
   setPeople: Dispatch<SetStateAction<PersonRecord[]>>;
   setIsSavingProfile: (value: boolean) => void;
   setIsSavingRelationship: (value: boolean) => void;
@@ -218,9 +223,11 @@ const mergeRelationshipRecords = (
 
 export const PeopleGraphDataProvider = ({
   immichBaseUrl,
+  immichWebUrl: immichWebUrlProp,
   currentUserName,
   children
 }: PeopleGraphDataProviderProps) => {
+  const immichWebUrl = immichWebUrlProp ?? immichBaseUrl;
   const { setStatus } = useToast();
   const [people, setPeople] = useState<PersonRecord[]>([]);
   const [relationships, setRelationships] = useState<RelationshipRecord[]>([]);
@@ -776,6 +783,7 @@ export const PeopleGraphDataProvider = ({
       savingFamilyId,
       dataRevision,
       immichBaseUrl,
+      immichWebUrl,
       setPeople,
       setIsSavingProfile,
       setIsSavingRelationship,
@@ -827,6 +835,7 @@ export const PeopleGraphDataProvider = ({
       handleUnlinkImmichIdentity,
       handleUploadPersonThumbnail,
       immichBaseUrl,
+      immichWebUrl,
       isLoading,
       isSavingProfile,
       isSavingRelationship,

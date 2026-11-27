@@ -427,6 +427,7 @@ export const App = () => {
         >
           <PeoplePage
             immichBaseUrl={linkStatus?.immichBaseUrl ?? null}
+            immichWebUrl={linkStatus?.immichWebUrl ?? null}
             currentUserName={linkStatus?.immichName ?? currentUser.name}
             onReplayOnboardingTutorial={handleReplayOnboardingTutorial}
           />

@@ -67,10 +67,19 @@ const envSchema = z
       .url()
       .optional()
       .or(z.literal("").transform(() => undefined)),
+    /** Immich address for links opened in the browser, when IMMICH_BASE_URL is only reachable by the API. */
+    IMMICH_PUBLIC_URL: z
+      .string()
+      .trim()
+      .url()
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
     IMMICH_PEOPLE_PAGE_SIZE: z.coerce.number().int().positive().default(1000),
     IMMICH_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
     IMMICH_HTTP_MAX_RETRIES: z.coerce.number().int().nonnegative().default(2),
     IMMICH_HTTP_RETRY_BASE_DELAY_MS: z.coerce.number().int().positive().default(200),
+    /** Most images one photo co-occurrence count reads from Immich, newest first. */
+    IMMICH_COOCCURRENCE_MAX_ASSETS: z.coerce.number().int().positive().default(250_000),
     WEB_ORIGIN: z.string().url().optional(),
     TREEMICH_TRUST_PROXY: optionalBooleanString,
     TREEMICH_ENCRYPTION_KEY: z

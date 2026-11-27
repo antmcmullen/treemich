@@ -355,6 +355,62 @@ describe("CooccurrenceService", () => {
     });
   });
 
+  it("keeps a first count on its date when preferences are saved before any run", async () => {
+    const { prisma, mocks } = createMockPrisma();
+    const service = new CooccurrenceService({
+      prismaClient: prisma as never,
+      now: () => new Date("2026-01-05T00:00:00.000Z")
+    });
+
+    mocks.treemichUserFindUniqueOrThrow.mockResolvedValue({
+      preferences: { dismissedSuggestions: ["photo:a|b"] }
+    });
+    mocks.cooccurrenceScheduleFindUnique.mockResolvedValue({
+      id: "schedule-1",
+      userId: "user-1",
+      enabled: true,
+      intervalDays: 7,
+      nextRunAt: new Date("2026-01-08T00:00:00.000Z"),
+      lastRunAt: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z")
+    });
+    mocks.cooccurrenceScheduleUpdate.mockResolvedValue({});
+
+    await service.syncScheduleFromPreferences("user-1");
+
+    expect(mocks.cooccurrenceScheduleUpdate).toHaveBeenCalledWith({
+      where: { userId: "user-1" },
+      data: {
+        enabled: true,
+        intervalDays: 7,
+        nextRunAt: new Date("2026-01-08T00:00:00.000Z")
+      }
+    });
+  });
+
+  it("starts a new schedule one interval from now", async () => {
+    const { prisma, mocks } = createMockPrisma();
+    const service = new CooccurrenceService({
+      prismaClient: prisma as never,
+      now: () => new Date("2026-01-05T00:00:00.000Z")
+    });
+
+    mocks.treemichUserFindUniqueOrThrow.mockResolvedValue({ preferences: {} });
+    mocks.cooccurrenceScheduleFindUnique.mockResolvedValue(null);
+    mocks.cooccurrenceScheduleCreate.mockResolvedValue({});
+
+    await service.syncScheduleFromPreferences("user-1");
+
+    expect(mocks.cooccurrenceScheduleCreate).toHaveBeenCalledWith({
+      data: {
+        userId: "user-1",
+        enabled: true,
+        intervalDays: 7,
+        nextRunAt: new Date("2026-01-12T00:00:00.000Z")
+      }
+    });
+  });
+
   it("queries only enabled due schedules for the scheduler loop", async () => {
     const { prisma, mocks } = createMockPrisma();
     const now = new Date("2026-01-20T12:00:00.000Z");

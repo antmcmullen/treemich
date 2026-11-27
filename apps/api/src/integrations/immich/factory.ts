@@ -94,7 +94,8 @@ export class ImmichClientFactory {
       peoplePageSize: env.IMMICH_PEOPLE_PAGE_SIZE,
       timeoutMs: env.IMMICH_HTTP_TIMEOUT_MS,
       maxRetries: env.IMMICH_HTTP_MAX_RETRIES,
-      retryBaseDelayMs: env.IMMICH_HTTP_RETRY_BASE_DELAY_MS
+      retryBaseDelayMs: env.IMMICH_HTTP_RETRY_BASE_DELAY_MS,
+      maxAssetsWithPeople: env.IMMICH_COOCCURRENCE_MAX_ASSETS
     });
     this.clients.set(clientKey, {
       client,
